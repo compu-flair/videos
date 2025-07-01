@@ -71,6 +71,7 @@ Each video project typically contains:
 ### Scene Classes
 - `InteractiveScene` - Base class for most scenes with interactive development support
 - `PiCreatureScene` - Scenes featuring the Pi creature character
+- `TeacherStudentsScene` - For Pi creature classroom interactions
 - Custom scene classes for specific mathematical contexts
 
 ### Animation Patterns
@@ -78,13 +79,33 @@ Each video project typically contains:
 - `self.wait()` for pauses
 - `self.add()` for static elements
 - Color constants: `BLUE`, `YELLOW`, `RED`, etc.
-- Mathematical typesetting with `Tex()` and `MathTex()`
+- Mathematical typesetting with `Tex()` (use this instead of `MathTex()` which is from ManimCommunity)
+- Format LaTeX strings with raw strings: `Tex(R"\pi")`, `Tex(R"\frac{1}{2}")`, etc.
+- Use `lag_ratio` parameter for staggered animations: `FadeIn(objects, lag_ratio=0.1)`
+- Common sequence: `self.play(Write(equation))` followed by `self.wait()`
 
 ### Mathematical Objects
 - `NumberPlane` and `ComplexPlane` for coordinate systems
 - `ParametricCurve` for mathematical curves
 - `VGroup` for grouping related objects
+- When creating multiple similar objects (e.g., multiple `NumberLine`s), create them within a `Group` or `VGroup` to avoid code duplication
 - Custom mathematical visualization classes in `once_useful_constructs/`
+
+### Code Organization
+- Place configuration constants at the top of files
+- Use class attributes for scene-specific configuration: `initial_positions = [10.5, 8]`
+- Helper methods use `get_*` naming pattern: `get_spring()`, `get_mass()`
+- Access frame with `frame = self.frame` for camera operations
+
+### Color and Styling
+- Use text-to-color mapping for mathematical expressions: `Tex(formula, t2c={"x": BLUE, "y": RED})`
+- Consistent color schemes: earth=BLUE, sun=YELLOW, mathematical variables get specific colors
+- Set properties with chained methods: `object.set_stroke(color, width).set_fill(color, opacity)`
+
+### Updaters and Animation Control
+- Use updaters for dynamic positioning: `object.add_updater(lambda m: m.move_to(target.get_center()))`
+- Alternative syntax: `object.f_always.move_to(reference.get_center)`
+- Use `LaggedStart(*animations, lag_ratio=0.1)` for sequential overlapping animations
 
 ## Python Code Style
 - Do not include indentation spaces on blank lines
