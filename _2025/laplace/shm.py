@@ -9,7 +9,7 @@ class SrpingMassSystem(VGroup):
         k=3,
         mu=0.1,
         equilibrium_length=7,
-        equilibrium_position=UP,
+        equilibrium_position=ORIGIN,
         spring_stroke_color=GREY_B,
         spring_stroke_width=2,
         spring_radius=0.25,
@@ -25,8 +25,13 @@ class SrpingMassSystem(VGroup):
         self.spring = self.get_spring(spring_stroke_color, spring_stroke_width, n_spring_curls, spring_radius)
         self.add(self.spring, self.mass)
 
+        self.k = k
+        self.mu = mu
         self.set_x(x0)
         self.velocity = v0
+
+        self._is_running = True
+        self.add_updater(lambda m, dt: m.time_step(dt))
 
     def get_spring(self, stroke_color, stroke_width, n_curls, radius):
         spring = ParametricCurve(
@@ -46,6 +51,7 @@ class SrpingMassSystem(VGroup):
         label.set_max_width(0.5 * mass.get_width())
         label.move_to(mass)
         mass.add(label)
+        mass.label = label
         return mass
 
     def set_x(self, x):
@@ -57,28 +63,222 @@ class SrpingMassSystem(VGroup):
     def get_x(self):
         return (self.mass.get_center() - self.equilibrium_position)[0]
 
-    def time_step(self, delta_t):
-        pass
+    def time_step(self, delta_t, dt_size=1e-2):
+        if not self._is_running:
+            return
+        if delta_t == 0:
+            return
+
+        state = [self.get_x(), self.velocity]
+        sub_steps = max(int(delta_t / dt_size), 1)
+        true_dt = delta_t / sub_steps
+        for _ in range(sub_steps):
+            # ODE
+            x, v = state
+            state += np.array([v, -self.k * x - self.mu * v]) * true_dt
+
+        self.set_x(state[0])
+        self.velocity = state[1]
+
+    def pause(self):
+        self._is_running = False
+
+    def unpause(self):
+        self._is_running = True
+
+    def set_k(self, k):
+        self.k = k
+        return self
+
+    def set_mu(self, mu):
+        self.mu = mu
+        return self
+
+    def set_velocity(self, velocity):
+        self.velocity = velocity
+        return self
+
+    def get_velocity_vector(self, scale_factor=0.5, thickness=3.0, v_offset=-0.25, color=GREEN):
+        """Get a vector showing the mass's velocity"""
+        vector = Vector(RIGHT, fill_color=color)
+        v_shift = v_offset * UP
+        vector.add_updater(lambda m: m.put_start_and_end_on(
+            self.mass.get_center() + v_shift,
+            self.mass.get_center() + v_shift + scale_factor * self.velocity * RIGHT
+        ))
+        return vector
+
+    def get_force_vector(self, scale_factor=0.5, thickness=3.0, v_offset=-0.25, color=RED):
+        """Get a vector showing the mass's velocity"""
+        vector = Vector(RIGHT, fill_color=color)
+        v_shift = v_offset * UP
+        vector.add_updater(lambda m: m.put_start_and_end_on(
+            self.mass.get_center() + v_shift,
+            self.mass.get_center() + v_shift + scale_factor * self.get_force() * RIGHT
+        ))
+        return vector
+
+    def get_force(self):
+        return -self.k * self.get_x() - self.mu * self.velocity
 
 
 class BasicSpringScene(InteractiveScene):
     def construct(self):
         # Add spring, give some initial oscillation
-        spring = SrpingMassSystem()
+        spring = SrpingMassSystem(
+            x0=2,
+            mu=0.1,
+            k=3,
+            equilibrium_position=2 * LEFT,
+            equilibrium_length=5,
+        )
         self.add(spring)
 
-        spring.add_updater(lambda m: m.set_x(2 * math.cos(TAU * self.time) * math.exp(-0.5 * self.time)))
-        self.wait(10)
-
         # Label on a number line
+        number_line = NumberLine(x_range=(-4, 4, 1))
+        number_line.next_to(spring.equilibrium_position, DOWN, buff=2.0)
+        number_line.add_numbers(font_size=24)
+
+        # Dashed line from mass to number line
+        dashed_line = DashedLine(
+            spring.mass.get_bottom(),
+            number_line.n2p(spring.get_x()),
+            stroke_color=GREY,
+            stroke_width=2
+        )
+        dashed_line.always.match_x(spring.mass)
+
+        # Arrow tip on number line
+        arrow_tip = ArrowTip(length=0.2, width=0.1)
+        arrow_tip.rotate(-90 * DEG)  # Point downward
+        arrow_tip.set_fill(TEAL)
+        arrow_tip.add_updater(lambda m: m.move_to(number_line.n2p(spring.get_x()), DOWN))
+
+        x_label = Tex("x = 0.00", font_size=24)
+        x_number = x_label.make_number_changeable("0.00")
+        x_number.add_updater(lambda m: m.set_value(spring.get_x()))
+        x_label.add_updater(lambda m: m.next_to(arrow_tip, UR, buff=0.1))
+
+        # Ambient playing, fade in labels
+        self.wait(2)
+        self.play(
+            VFadeIn(number_line),
+            VFadeIn(dashed_line),
+            VFadeIn(arrow_tip),
+            VFadeIn(x_label),
+        )
+        self.wait(7)
+
+        # Show velocity
+        x_color, v_color, a_color = [interpolate_color_by_hsl(TEAL, RED, a) for a in np.linspace(0, 1, 3)]
+        v_vect = spring.get_velocity_vector(color=v_color, scale_factor=0.25)
+        a_vect = spring.get_force_vector(color=a_color, scale_factor=0.25)
+        a_vect.add_updater(lambda m: m.shift(v_vect.get_end() - m.get_start()))
+
+        self.play(VFadeIn(v_vect))
+        self.wait(2)
+        self.play(VFadeIn(a_vect))
+        self.wait(6)
+        self.wait_until(lambda: spring.velocity <= 0)
 
         # Show the force law
+        self.remove(v_vect)
+        a_vect.remove_updater(a_vect.get_updaters()[-1])
+        spring.pause()
 
-        # Write the differential equation
+        self.wait()
+        for x in range(2, 5):
+            self.play(spring.animate.set_x(x))
+            self.wait()
+
+        spring.unpause()
+        spring.set_mu(0.25)
+        self.wait(15)
 
         # Show the solution graph
+        frame = self.frame
 
-        # Add damping term
+        time_tracker = ValueTracker(0)
+        time_tracker.add_updater(lambda m, dt: m.increment_value(dt))
+
+        axes = Axes(
+            x_range=(0, 20, 1),
+            y_range=(-2, 2, 1),
+            width=12,
+            height=3,
+            axis_config={"stroke_color": GREY}
+        )
+        axes.next_to(spring, UP, LARGE_BUFF)
+        axes.align_to(number_line, LEFT)
+
+        x_axis_label = Text("Time", font_size=24).next_to(axes.x_axis, RIGHT, buff=0.1)
+        y_axis_label = Tex("x(t)", font_size=24).next_to(axes.y_axis.get_top(), RIGHT, buff=0.1)
+        axes.add(x_axis_label)
+        axes.add(y_axis_label)
+
+        tracking_point = Point()
+        tracking_point.add_updater(lambda p: p.move_to(
+            axes.c2p(time_tracker.get_value(), spring.get_x())
+        ))
+
+        position_graph = TracedPath(
+            tracking_point.get_center,
+            stroke_color=BLUE,
+            stroke_width=3,
+        )
+
+        spring.pause()
+        spring.set_velocity(0)
+        self.play(
+            frame.animate.reorient(0, 0, 0, (2.88, 1.88, 0.0), 12.48),
+            FadeIn(axes),
+            VFadeOut(a_vect),
+            spring.animate.set_x(2),
+        )
+        self.add(tracking_point, position_graph, time_tracker)
+        spring.unpause()
+        self.wait(20)
+        position_graph.clear_updaters()
+        self.wait(20)
+
+
+class DampingForceDemo(InteractiveScene):
+    def construct(self):
+        # Create spring-mass system with invisible spring and damping only
+        spring_system = SrpingMassSystem(
+            x0=-4,
+            v0=2,
+            k=0,
+            mu=0.3,
+            equilibrium_position=ORIGIN,
+            equilibrium_length=6,
+            mass_width=0.8,
+            mass_color=BLUE_E,
+            mass_label="m",
+        )
+        spring_system.spring.set_opacity(0)
+        self.add(spring_system)
+
+        # Create velocity vector
+        v_color = interpolate_color_by_hsl(TEAL, RED, 0.5)
+        velocity_vector = spring_system.get_velocity_vector(color=v_color, scale_factor=0.8)
+
+        velocity_label = Tex(R'\vec{\textbf{v}}', font_size=24)
+        velocity_label.set_color(v_color)
+        velocity_label.always.next_to(velocity_vector, RIGHT, buff=SMALL_BUFF)
+        velocity_label.add_updater(lambda m: m.set_max_width(0.5 * velocity_vector.get_width()))
+
+        # Create damping force vector
+        damping_vector = spring_system.get_velocity_vector(scale_factor=-0.5, color=RED, v_offset=-0.5)
+        damping_label = Tex(R"-\mu v", fill_color=RED, font_size=24)
+        damping_label.always.next_to(damping_vector, DOWN, SMALL_BUFF)
+
+        # Add vectors and labels
+        self.add(velocity_vector, velocity_label)
+        self.add(damping_vector, damping_label)
+
+        # Let the system evolve
+        self.wait(15)
 
 
 class SolveDampedSpringEquation(InteractiveScene):
@@ -611,3 +811,83 @@ class DampedSpringSolutionsOnSPlane(InteractiveScene):
         slider = VGroup(number_line, indicator, label)
         slider.value_tracker = tracker
         return slider
+
+
+class RotatingExponentials(InteractiveScene):
+    def construct(self):
+        # Create time tracker
+        t_tracker = ValueTracker(0)
+        t_tracker.add_updater(lambda m, dt: m.increment_value(dt))
+        omega = 1.5  # Angular frequency
+
+        self.add(t_tracker)
+
+        # Create two complex planes side by side
+        left_plane, right_plane = planes = VGroup(
+            ComplexPlane(
+                (-2, 2), (-2, 2),
+                background_line_style=dict(stroke_color=BLUE, stroke_width=1),
+            )
+            for _ in range(2)
+        )
+        for plane in planes:
+            plane.set_height(4)
+            plane.add_coordinate_labels(font_size=16)
+        planes.arrange(RIGHT, buff=1.0)
+        planes.to_edge(RIGHT)
+
+        self.add(planes)
+
+        # Add titles
+        t2c = {R"\omega": PINK}
+        left_title, right_title = titles = VGroup(
+            Tex(tex, t2c=t2c, font_size=48)
+            for tex in [
+                R"e^{+i \omega t}",
+                R"e^{-i \omega t}",
+            ]
+        )
+        for title, plane in zip(titles, planes):
+            title.next_to(plane, UP)
+
+        self.add(titles)
+
+        # Create rotating vectors
+        left_vector = self.get_rotating_vector(left_plane, 1j * omega, t_tracker)
+        right_vector = self.get_rotating_vector(right_plane, -1j * omega, t_tracker)
+        vectors = VGroup(left_vector, right_vector)
+
+        left_tail, right_tail = tails = VGroup(
+            TracingTail(vect.get_end, stroke_color=TEAL, time_traced=3)
+            for vect in vectors
+        )
+
+        self.add(Point())
+        self.add(vectors, tails)
+        self.wait(3)
+
+        # Add time display
+        time_display = Tex("t = 0.00", font_size=36).to_corner(UR)
+        time_label = time_display.make_number_changeable("0.00")
+        time_label.add_updater(lambda m: m.set_value(t_tracker.get_value()))
+
+        self.add(time_display)
+        self.wait(3)
+
+        # Animate rotation
+        self.play(t_tracker.animate.set_value(4 * PI), run_time=8, rate_func=linear)
+        self.wait()
+
+        # Add a pi creature
+
+    def get_rotating_vector(self, plane, s, t_tracker):
+        """Create a rotating vector for e^(st) on the given plane"""
+        def update_vector(vector):
+            t = t_tracker.get_value()
+            z = np.exp(s * t)
+            vector.put_start_and_end_on(plane.n2p(0), plane.n2p(z))
+
+        vector = Arrow(LEFT, RIGHT, fill_color=TEAL)
+        vector.add_updater(update_vector)
+
+        return vector
