@@ -169,6 +169,18 @@ class BasicSpringScene(InteractiveScene):
         )
         self.wait(7)
 
+        # (For an insertion)
+        if False:
+            x_label_arrow = Vector(1.5 * DL, thickness=8)
+            x_label_arrow.set_fill(YELLOW)
+            x_label_arrow.always.move_to(arrow_tip, DL).shift(2 * RIGHT + 0.75 * UP)
+            self.play(
+                VFadeIn(x_label_arrow, time_span=(1, 2)),
+                x_label.animate.scale(2),
+                run_time=2
+            )
+            self.wait(8)
+
         # Show velocity
         x_color, v_color, a_color = [interpolate_color_by_hsl(TEAL, RED, a) for a in np.linspace(0, 1, 3)]
         v_vect = spring.get_velocity_vector(color=v_color, scale_factor=0.25)
@@ -176,9 +188,9 @@ class BasicSpringScene(InteractiveScene):
         a_vect.add_updater(lambda m: m.shift(v_vect.get_end() - m.get_start()))
 
         self.play(VFadeIn(v_vect))
-        self.wait(2)
+        self.wait(5)
         self.play(VFadeIn(a_vect))
-        self.wait(6)
+        self.wait(8)
         self.wait_until(lambda: spring.velocity <= 0)
 
         # Show the force law
@@ -191,6 +203,18 @@ class BasicSpringScene(InteractiveScene):
             self.play(spring.animate.set_x(x))
             self.wait()
 
+        # Back and forth
+        t_tracker = ValueTracker(0)
+        self.play(
+            UpdateFromAlphaFunc(
+                spring,
+                lambda m, a: m.set_x(4 * math.cos(2 * TAU * a)),
+                rate_func=linear,
+                run_time=8,
+            )
+        )
+
+        # Ambient springing
         spring.unpause()
         spring.set_mu(0.25)
         self.wait(15)
@@ -334,10 +358,10 @@ class SolveDampedSpringEquation(InteractiveScene):
             "x'(t)": colors[1],
             "x''(t)": colors[2],
         }
-        equation1 = Tex(R"m x''(t) = -k x(t) - \mu x'(t)", t2c=t2c)
+        equation1 = Tex(R"{m} x''(t) = -k x(t) - \mu x'(t)", t2c=t2c)
         equation1.to_corner(UL)
 
-        ma = equation1["m x''(t)"][0]
+        ma = equation1["{m} x''(t)"][0]
         kx = equation1["-k x(t)"][0]
         mu_v = equation1[R"- \mu x'(t)"][0]
         rhs = VGroup(kx, mu_v)
@@ -373,7 +397,7 @@ class SolveDampedSpringEquation(InteractiveScene):
         self.play(FadeOut(mu_v_brace))
 
         # Rearrange
-        equation2 = Tex(R"m x''(t) + \mu x'(t) + k x(t) = 0", t2c=t2c)
+        equation2 = Tex(R"{m} x''(t) + \mu x'(t) + k x(t) = 0", t2c=t2c)
         equation2.move_to(equation1, UL)
 
         self.play(TransformMatchingTex(equation1, equation2, path_arc=45 * DEG))
@@ -403,7 +427,7 @@ class SolveDampedSpringEquation(InteractiveScene):
 
         # Plug it in
         t2c["s"] = YELLOW
-        equation3 = Tex(R"m s^2 e^{st} + \mu s e^{st} + k e^{st} = 0", t2c=t2c)
+        equation3 = Tex(R"{m} s^2 e^{st} + \mu s e^{st} + k e^{st} = 0", t2c=t2c)
         equation3.next_to(equation2, DOWN, LARGE_BUFF)
         pos_parts = VGroup(equation2["x(t)"][0], equation3["e^{st}"][-1])
         vel_parts = VGroup(equation2["x'(t)"][0], equation3["s e^{st}"][0])
@@ -431,7 +455,7 @@ class SolveDampedSpringEquation(InteractiveScene):
         self.play(
             LaggedStart(
                 (TransformFromCopy(equation2[tex], equation3[tex])
-                for tex in ["m", "+", "k", R"\mu", "=", "0"]),
+                for tex in ["{m}", "+", "k", R"\mu", "=", "0"]),
                 lag_ratio=0.05,
             ),
         )
@@ -449,6 +473,8 @@ class SolveDampedSpringEquation(InteractiveScene):
         rhs.set_width(equation5.get_width() - equation6[:2].get_width(), about_edge=LEFT)
         equation6.refresh_bounding_box()
         equation6["{s}"].set_color(YELLOW)
+        equation6.scale(1.25, about_edge=LEFT)
+
         new_equations.arrange(DOWN, buff=LARGE_BUFF, aligned_edge=LEFT)
         new_equations.move_to(equation3, UL)
         equation4 = new_equations[0]
@@ -502,25 +528,89 @@ class SolveDampedSpringEquation(InteractiveScene):
         self.play(equation4.animate.set_fill(opacity=1))
         self.wait()
 
+        # Cover up mu terms
+        boxes = VGroup(
+            SurroundingRectangle(mob)
+            for mob in [
+                equation2[R"+ \mu x'(t)"],
+                equation4[R"+ \mu s"],
+                equation5[R"+ \mu s"],
+            ]
+        )
+        boxes.set_fill(BLACK, 0)
+        boxes.set_stroke(colors[1], 2)
+
+        self.add(Point())
+        self.play(FadeIn(boxes, lag_ratio=0.1))
+        self.play(boxes.animate.set_fill(BLACK, 0.8).set_stroke(width=1, opacity=0.5))
+        self.wait()
+
+        # Add simple answer
+        simple_answer = Tex(R"s = \pm i \sqrt{k / m}", t2c=t2c)
+        simple_answer.next_to(equation5, DOWN, LARGE_BUFF, aligned_edge=RIGHT)
+
+        omega_brace = Brace(simple_answer[R"\sqrt{k / m}"], DOWN, SMALL_BUFF)
+        omega = omega_brace.get_tex(R"\omega")
+        omega.set_color(PINK)
+
+        self.play(FadeIn(simple_answer))
+        self.wait()
+        self.play(GrowFromCenter(omega_brace), Write(omega))
+        self.wait()
+
+        simple_answer.add(omega_brace, omega)
+
+        # Reminder of what s represents
+        s_copy = simple_answer[0].copy()
+        s_rect = SurroundingRectangle(s_copy)
+
+        self.play(ShowCreation(s_rect))
+        self.wait()
+        self.play(
+            s_rect.animate.surround(hyp_tex["e^{st}"]).set_anim_args(path_arc=-60 * DEG),
+            FadeTransform(s_copy, hyp_tex["s"], path_arc=-60 * DEG),
+            run_time=2
+        )
+        self.wait()
+        self.play(FadeOut(s_rect))
+
+        # Move hypothesis
+        frame = self.frame
+        self.play(
+            frame.animate.scale(1.5, about_edge=LEFT),
+            hypothesis.animate.next_to(equation2, UP, LARGE_BUFF, aligned_edge=LEFT),
+            FadeOut(sub_hyp_word),
+            run_time=1.5
+        )
+        self.wait()
+
         # Show quadratic formula
         qf_arrow = Arrow(
             equation5.get_right(),
-            equation6.get_right(),
-            path_arc=-120 * DEG
+            equation6.get_corner(UR) + 0.5 * LEFT,
+            path_arc=-150 * DEG
         )
         qf_words = Text("Quadratic\nFormula", font_size=30, fill_color=GREY_B)
-        qf_words.next_to(qf_arrow, RIGHT)
+        qf_words.next_to(qf_arrow.get_center(), UR)
 
         naked_equation = equation6.copy()
         for sym in key_syms:
-            naked_equation[sym].scale(0).set_fill(opacity=0).move_to(naked_equation.get_right())
+            naked_equation[sym].scale(0).set_fill(opacity=0).move_to(10 * LEFT)
 
+        qf_rect = SurroundingRectangle(equation6[2:])
+        qf_rect.set_stroke(YELLOW, 1.5)
+
+        self.play(
+            FadeOut(simple_answer, DOWN),
+            boxes.animate.set_fill(opacity=0).set_stroke(width=2, opacity=1)
+        )
+        self.play(FadeOut(boxes))
+        self.wait()
         self.play(
             TransformFromCopy(equation5["s"], equation6["s"]),
             Write(equation6["="]),
             GrowFromPoint(qf_arrow, qf_arrow.get_corner(UL)),
             FadeIn(qf_words, shift=0.5 * DOWN),
-            # Write(naked_equation),
         )
         self.play(
             LaggedStart(*(
@@ -532,23 +622,7 @@ class SolveDampedSpringEquation(InteractiveScene):
         self.wait()
         self.remove(naked_equation)
         self.add(equation6)
-
-        # Move hypothesis
-        frame = self.frame
-        equation6.target = equation6.generate_target()
-        equation6.target.scale(1.25, about_edge=LEFT).shift(0.5 * DOWN)
-        qf_rect = SurroundingRectangle(equation6.target[2:])
-        qf_rect.set_stroke(YELLOW, 1.5)
-        self.play(
-            hypothesis.animate.next_to(equation2, UP, LARGE_BUFF, aligned_edge=LEFT),
-            FadeOut(sub_hyp_word),
-            frame.animate.scale(1.5, about_edge=LEFT),
-            FadeOut(qf_arrow),
-            FadeOut(qf_words),
-            MoveToTarget(equation6),
-            ShowCreation(qf_rect, time_span=(0.75, 1.5)),
-            run_time=1.5
-        )
+        self.play(ShowCreation(qf_rect))
         self.wait()
 
     def old_material(self):
@@ -668,9 +742,6 @@ class SolveDampedSpringEquation(InteractiveScene):
 
 class DampedSpringSolutionsOnSPlane(InteractiveScene):
     def construct(self):
-        # Background
-        self.add_background_image()
-
         # Add the plane
         plane = ComplexPlane((-3, 2), (-2, 2))
         plane.set_height(5)
@@ -694,11 +765,11 @@ class DampedSpringSolutionsOnSPlane(InteractiveScene):
         sliders.arrange(RIGHT, buff=MED_LARGE_BUFF)
         sliders.next_to(plane, UP, aligned_edge=LEFT)
 
-        for tracker, value in zip(trackers, [1, 0, 0]):
+        for tracker, value in zip(trackers, [1, 0, 3]):
             tracker.set_value(value)
 
         self.add(trackers)
-        self.add(sliders)
+        self.add(sliders[0], sliders[2])
 
         # Add the dots
         def get_roots():
@@ -717,27 +788,41 @@ class DampedSpringSolutionsOnSPlane(InteractiveScene):
         root_dots = GlowDot().replicate(2)
         root_dots.add_updater(update_dots)
 
-        rect_edge_point = (-3.33, -1.42, 0.0)
+        s_rhs_point = Point((-4.09, -1.0, 0.0))
+        rect_edge_point = (-3.33, -1.18, 0.0)
 
         def update_lines(lines):
             for line, dot in zip(lines, root_dots):
-                line.put_start_and_end_on(rect_edge_point, dot.get_center())
+                line.put_start_and_end_on(s_rhs_point.get_center(), dot.get_center())
 
         lines = Line().replicate(2)
         lines.set_stroke(YELLOW, 2, 0.35)
         lines.add_updater(update_lines)
 
         self.add(root_dots)
-        self.add(lines)
 
-        # Play with values
-        self.play(k_tracker.animate.set_value(2), run_time=3)
+        # Play with k
+        self.play(ShowCreation(lines, lag_ratio=0, suspend_mobject_updating=True))
+        self.play(k_tracker.animate.set_value(1), run_time=2)
+        self.play(m_tracker.animate.set_value(4), run_time=2)
         self.wait()
-        self.play(mu_tracker.animate.set_value(2), run_time=3)
+        self.play(k_tracker.animate.set_value(3), run_time=2)
+        self.play(m_tracker.animate.set_value(1), run_time=2)
         self.wait()
-        self.play(k_tracker.animate.set_value(5), run_time=3)
+
+        # Play with mu
+        self.play(
+            s_rhs_point.animate.move_to(rect_edge_point),
+            VFadeIn(sliders[1])
+        )
         self.wait()
-        self.play(k_tracker.animate.set_value(2), run_time=3)
+        self.play(mu_tracker.animate.set_value(3), run_time=5)
+        self.wait()
+        self.play(mu_tracker.animate.set_value(0.5), run_time=3)
+        self.wait()
+
+        # Background
+        self.add_background_image()
 
         # Zoom out and show graph
         frame = self.frame
@@ -765,25 +850,24 @@ class DampedSpringSolutionsOnSPlane(InteractiveScene):
         )
         self.wait()
 
+        # Show exponential decay
+        exp_graph = axes.get_graph(lambda t: np.exp(get_roots()[0].real * t))
+        exp_graph.set_stroke(WHITE, 1)
+
+        self.play(ShowCreation(exp_graph))
+        self.wait()
+
         # More play
-        self.play(mu_tracker.animate.set_value(1), run_time=2)
-        self.wait()
+        self.play(k_tracker.animate.set_value(1), run_time=2)
         self.play(k_tracker.animate.set_value(4), run_time=2)
+        self.play(FadeOut(exp_graph))
         self.wait()
+        for value in [2, 4.2, 0.5]:
+            self.play(mu_tracker.animate.set_value(value), run_time=3)
+            self.wait()
 
-        # Set mu to zero
-        mu_rect = SurroundingRectangle(sliders[1])
-        mu_rect.set_stroke(colors[1], 2)
-        mu_rect.stretch(1.2, 1)
-
-        self.play(ShowCreation(mu_rect))
-        self.play(mu_tracker.animate.set_value(0), run_time=3)
-        self.play(k_tracker.animate.set_value(1), run_time=4)
-        self.play(FadeOut(mu_rect))
-        self.play(FadeOut(self.background_image))
-        self.wait()
-        self.play(k_tracker.animate.set_value(4), run_time=3)
-        self.wait()
+        # Smooth all the way to end
+        self.play(mu_tracker.animate.set_value(4.2), run_time=12)
 
     def add_background_image(self):
         image = ImageMobject('/Users/grant/3Blue1Brown Dropbox/3Blue1Brown/videos/2025/laplace/shm/images/LaplaceFormulaStill.png')
@@ -818,7 +902,11 @@ class RotatingExponentials(InteractiveScene):
         # Create time tracker
         t_tracker = ValueTracker(0)
         t_tracker.add_updater(lambda m, dt: m.increment_value(dt))
-        omega = 1.5  # Angular frequency
+        get_t = t_tracker.get_value
+        omega = PI / 2
+
+        def get_x():
+            return math.cos(omega * get_t())
 
         self.add(t_tracker)
 
@@ -831,10 +919,12 @@ class RotatingExponentials(InteractiveScene):
             for _ in range(2)
         )
         for plane in planes:
-            plane.set_height(4)
+            plane.axes.set_stroke(width=1)
+            plane.set_height(3.5)
             plane.add_coordinate_labels(font_size=16)
         planes.arrange(RIGHT, buff=1.0)
         planes.to_edge(RIGHT)
+        planes.to_edge(UP, buff=1.5)
 
         self.add(planes)
 
@@ -853,41 +943,380 @@ class RotatingExponentials(InteractiveScene):
         self.add(titles)
 
         # Create rotating vectors
-        left_vector = self.get_rotating_vector(left_plane, 1j * omega, t_tracker)
-        right_vector = self.get_rotating_vector(right_plane, -1j * omega, t_tracker)
+        left_vector = self.get_rotating_vector(left_plane, 1j * omega, t_tracker, color=TEAL)
+        right_vector = self.get_rotating_vector(right_plane, -1j * omega, t_tracker, color=RED)
         vectors = VGroup(left_vector, right_vector)
 
         left_tail, right_tail = tails = VGroup(
-            TracingTail(vect.get_end, stroke_color=TEAL, time_traced=3)
+            TracingTail(vect.get_end, stroke_color=vect.get_color(), time_traced=2)
             for vect in vectors
         )
 
         self.add(Point())
         self.add(vectors, tails)
-        self.wait(3)
 
         # Add time display
         time_display = Tex("t = 0.00", font_size=36).to_corner(UR)
         time_label = time_display.make_number_changeable("0.00")
         time_label.add_updater(lambda m: m.set_value(t_tracker.get_value()))
 
-        self.add(time_display)
-        self.wait(3)
-
         # Animate rotation
-        self.play(t_tracker.animate.set_value(4 * PI), run_time=8, rate_func=linear)
-        self.wait()
+        self.wait(12)
 
-        # Add a pi creature
+        # Add spring
+        spring = SrpingMassSystem(
+            equilibrium_position=planes[0].get_bottom() + DOWN,
+            equilibrium_length=3,
+            n_spring_curls=8,
+            mass_width=0.5,
+            spring_radius=0.2,
+        )
+        spring.pause()
+        unit_size = planes[0].x_axis.get_unit_size()
+        spring.add_updater(lambda m: m.set_x(unit_size * get_x()))
 
-    def get_rotating_vector(self, plane, s, t_tracker):
+        v_line = Line()
+        v_line.set_stroke(BLUE_A, 2)
+        v_line.f_always.put_start_and_end_on(spring.mass.get_top, left_vector.get_end)
+
+        self.play(VFadeIn(spring), VFadeIn(v_line))
+        self.wait(20)
+        self.play(
+            VFadeOut(spring),
+            VFadeOut(v_line),
+            VFadeOut(left_tail),
+            VFadeOut(right_tail),
+        )
+
+        # Add them up
+        new_plane_center = planes.get_center()
+        shift_factor = ValueTracker(0)
+        right_vector.add_updater(lambda m: m.shift(shift_factor.get_value() * left_vector.get_vector()))
+
+        sum_expr = VGroup(titles[0], Tex(R"+"), titles[1])
+        sum_expr.target = sum_expr.generate_target()
+        sum_expr.target.arrange(RIGHT, buff=MED_SMALL_BUFF, aligned_edge=DOWN)
+        sum_expr.target.next_to(planes, UP, MED_SMALL_BUFF)
+        sum_expr[1].set_opacity(0).next_to(planes, UP)
+
+        result_dot = GlowDot()
+        result_dot.f_always.move_to(right_vector.get_end)
+
+        self.play(
+            planes[0].animate.move_to(new_plane_center),
+            planes[1].animate.move_to(new_plane_center).set_opacity(0),
+            MoveToTarget(sum_expr),
+            run_time=2,
+        )
+        self.play(shift_factor.animate.set_value(1))
+        self.play(FadeIn(result_dot))
+        self.wait(4)
+
+        # Add another spring
+        spring = SrpingMassSystem(
+            equilibrium_position=planes[0].get_bottom() + DOWN,
+            equilibrium_length=5,
+            n_spring_curls=8,
+            mass_width=0.5,
+            spring_radius=0.2,
+        )
+        spring.pause()
+        unit_size = planes[0].x_axis.get_unit_size()
+        spring.add_updater(lambda m: m.set_x(2 * unit_size * get_x()))
+
+        v_line = Line()
+        v_line.set_stroke(BLUE_A, 2)
+        v_line.f_always.put_start_and_end_on(spring.mass.get_top, result_dot.get_center)
+
+        self.play(VFadeIn(spring), VFadeIn(v_line))
+        self.wait(2)
+
+        # Right hand side
+        rhs = Tex(R"= 2 \cos(\omega t)", t2c={R"\omega": PINK})
+        rhs.next_to(sum_expr, RIGHT, buff=MED_SMALL_BUFF).shift(SMALL_BUFF * DOWN)
+
+        self.play(Write(rhs))
+        self.wait(20)
+
+    def get_rotating_vector(self, plane, s, t_tracker, color=TEAL, thickness=3):
         """Create a rotating vector for e^(st) on the given plane"""
         def update_vector(vector):
             t = t_tracker.get_value()
             z = np.exp(s * t)
             vector.put_start_and_end_on(plane.n2p(0), plane.n2p(z))
 
-        vector = Arrow(LEFT, RIGHT, fill_color=TEAL)
+        vector = Arrow(LEFT, RIGHT, fill_color=color, thickness=thickness)
         vector.add_updater(update_vector)
 
         return vector
+
+
+class SimpleSolutionSummary(InteractiveScene):
+    def construct(self):
+        # Summary of the "strategy" up top
+        t2c = {"m": RED, "k": TEAL, "{s}": YELLOW, R"\omega": PINK}
+        kw = dict(t2c=t2c, font_size=36)
+        arrow = Vector(1.5 * RIGHT)
+        top_eq = VGroup(
+            Tex(R"m x''(t) + k x(t) = 0", **kw),
+            arrow,
+            Tex(R"e^{{s}t}\left(m{s}^2 + k\right) = 0", **kw),
+            Tex(R"\Longrightarrow", **kw),
+            Tex(R"{s} = \pm i \underbrace{\sqrt{k / m}}_{\omega}", **kw),
+        )
+        top_eq.arrange(RIGHT)
+        top_eq[-1].align_to(top_eq[2], UP)
+        guess = Tex(R"\text{Guess } e^{{s}t}", **kw)
+        guess.scale(0.75)
+        guess.next_to(arrow, UP, buff=0)
+        arrow.add(guess)
+
+        top_eq.set_width(FRAME_WIDTH - 1)
+
+        top_eq.center().to_edge(UP)
+        self.add(top_eq)
+
+
+class ShowFamilyOfComplexSolutions(RotatingExponentials):
+    def construct(self):
+        # Show two basis solutions on the left
+        t2c = {R"\omega": PINK}
+        plane_config = dict(
+            background_line_style=dict(stroke_color=BLUE, stroke_width=1),
+            faded_line_style=dict(stroke_color=BLUE, stroke_width=0.5, stroke_opacity=0.25),
+        )
+        left_planes = VGroup(
+            ComplexPlane((-1, 1), (-1, 1), **plane_config)
+            for _ in range(2)
+        )
+        left_planes.arrange(DOWN, buff=1.0)
+        left_planes.set_height(6.5)
+        left_planes.to_corner(DL)
+
+        left_plane_labels = VGroup(
+            Tex(R"e^{+i\omega}", t2c=t2c),
+            Tex(R"e^{-i\omega}", t2c=t2c),
+        )
+        for label, plane in zip(left_plane_labels, left_planes):
+            label.next_to(plane, UP, SMALL_BUFF)
+
+        t_tracker = ValueTracker()
+        t_tracker.add_updater(lambda m, dt: m.increment_value(dt))
+
+        rot_vects = VGroup(
+            self.get_rotating_vector(plane, u * 1j * TAU / 4, t_tracker, color, 3)
+            for plane, u, color in zip(left_planes, [+1, -1], [TEAL, RED])
+        )
+        left_tail, right_tail = tails = VGroup(
+            TracingTail(vect.get_end, stroke_color=vect.get_color(), time_traced=2)
+            for vect in rot_vects
+        )
+
+        self.add(left_planes)
+        self.add(left_plane_labels)
+        self.add(t_tracker)
+        self.add(rot_vects)
+        self.add(tails)
+
+        self.wait(4)
+
+        # Show combination with tunable parameters
+        right_plane = ComplexPlane((-3, 3), (-3, 3), **plane_config)
+        right_plane.set_height(5.5)
+        right_plane.next_to(left_planes, RIGHT, aligned_edge=DOWN, buff=2.5)
+
+        self.add(right_plane)
+
+        pass
+
+
+class ShowFamilyOfRealSolutions(InteractiveScene):
+    def construct(self):
+        pass
+
+
+class SetOfInitialConditions(InteractiveScene):
+    graph_time = 8
+
+    def construct(self):
+        # Set up all boxes
+        frame = self.frame
+        box = Rectangle(width=3.5, height=2.0)
+        box.set_stroke(WHITE, 1)
+        v_line = DashedLine(box.get_top(), box.get_bottom())
+        v_line.set_stroke(GREY_C, 1, 0.5)
+        v_line.scale(0.9)
+        box.add(v_line)
+
+        n_rows = 5
+        n_cols = 5
+        box_row = box.get_grid(1, n_cols, buff=0)
+        box_grid = box_row.get_grid(n_rows, 1, buff=0)
+        for row, v0 in zip(box_grid, np.linspace(1, -1, n_rows)):
+            for box, x0 in zip(row, np.linspace(-1, 1, n_cols)):
+                box.spring = self.get_spring_in_a_box(box, x0=x0, v0=v0)
+
+        # Show the first example
+        mid_row = box_grid[n_rows // 2]
+        x0_labels = VGroup(
+            Tex(Rf"x_0 = {x0}", font_size=48).next_to(box, UP, SMALL_BUFF)
+            for x0, box in zip(range(-2, 3), mid_row)
+        )
+        mid_row_springs = VGroup(box.spring for box in mid_row)
+
+        mid_row_solutions = VGroup(
+            self.get_solution_graph(box, x0=x0)
+            for box, x0 in zip(mid_row, range(-2, 3))
+        )
+        last_solution = mid_row_solutions[-1]
+
+        last_box = mid_row[-1]
+        last_spring = last_box.spring
+        top_line = Line(last_box.get_center(), last_spring.mass.get_center())
+        top_line.set_y(last_spring.mass.get_y(UP))
+        brace = LineBrace(Line(ORIGIN, 1.5 * RIGHT))
+        brace.match_width(top_line)
+        brace.next_to(top_line, UP, SMALL_BUFF)
+        brace.stretch(0.5, 1, about_edge=DOWN)
+        last_x = last_spring.get_x()
+        last_spring.set_x(0)
+
+        self.add(last_box, last_spring)
+        frame.move_to(mid_row[-1]).set_height(5)
+
+        self.play(
+            GrowFromPoint(brace, brace.get_left()),
+            last_spring.animate.set_x(last_x),
+            Write(x0_labels[-1]),
+        )
+        self.wait()
+        last_spring.unpause()
+        last_spring.v_vect.set_opacity(0)
+        self.play(
+            frame.animate.reorient(0, 0, 0, (6.7, -0.61, 0.0), 6.16).set_anim_args(run_time=2),
+            FadeIn(last_solution[0]),
+            ShowCreation(last_solution[1], rate_func=linear, run_time=self.graph_time)
+        )
+        last_spring.pause()
+
+        # Show the full middle row
+        self.play(
+            frame.animate.center().set_width(box_grid.get_width() + 2).set_anim_args(time_span=(0, 1.5)),
+            last_spring.animate.set_x(1).set_anim_args(time_span=(0, 1)),
+            LaggedStartMap(FadeIn, VGroup(*reversed(mid_row[:-1])), lag_ratio=0.75),
+            LaggedStartMap(FadeIn, VGroup(*reversed(mid_row_springs[:-1])), lag_ratio=0.75),
+            LaggedStartMap(FadeIn, VGroup(*reversed(x0_labels[:-1])), lag_ratio=0.75),
+            LaggedStartMap(FadeIn, VGroup(*reversed(mid_row_solutions[:-1])), lag_ratio=0.75),
+            run_time=3
+        )
+        self.wait()
+
+        graphs = VGroup(solution[1] for solution in mid_row_solutions)
+        faint_graphs = graphs.copy().set_stroke(width=1, opacity=0.25)
+        for spring in mid_row_springs:
+            spring.unpause()
+            spring.v_vect.set_opacity(0)
+            spring.x0 = spring.get_x()
+        self.add(faint_graphs)
+        self.play(
+            ShowCreation(graphs, lag_ratio=0, run_time=self.graph_time, rate_func=linear),
+        )
+        self.wait()
+        self.remove(faint_graphs)
+        for spring in mid_row_springs:
+            spring.pause()
+            spring.v_vect.set_opacity(0)
+            spring.set_velocity(0)
+        self.play(
+            FadeOut(mid_row_solutions),
+            *(spring.animate.set_x(spring.x0) for spring in mid_row_springs)
+        )
+
+        # Show initial velocities
+        v0_labels = VGroup(
+            Tex(Rf"v_0 = {v0}", font_size=48).next_to(row, LEFT).set_fill(TEAL)
+            for v0, row in zip(range(2, -3, -1), box_grid)
+        )
+        other_indices = [0, 1, 3, 4]
+        row_springs = VGroup(VGroup(box.spring for box in row) for row in box_grid)
+
+        self.play(
+            frame.animate.set_width(box_grid.get_width() + 3, about_edge=DR),
+            Write(v0_labels[2])
+        )
+        self.wait()
+        self.play(
+            LaggedStartMap(FadeIn, VGroup(box_grid[i] for i in other_indices), lag_ratio=0.5, run_time=3),
+            LaggedStartMap(FadeIn, VGroup(v0_labels[i] for i in other_indices), lag_ratio=0.5, run_time=3),
+            LaggedStartMap(FadeIn, VGroup(row_springs[i] for i in other_indices), lag_ratio=0.5, run_time=3),
+            x0_labels.animate.next_to(box_grid, UP, SMALL_BUFF).set_anim_args(run_time=1),
+            FadeOut(brace),
+        )
+        self.wait()
+
+        # Let it play
+        for row in box_grid:
+            for box in row:
+                box.spring.unpause()
+
+        self.wait(20)
+
+        # Add graphs
+        all_solutions = VGroup(
+            self.get_solution_graph(box, x0=x0, v0=v0, graph_color=YELLOW).move_to(box).scale(0.8)
+            for row, v0 in zip(box_grid, range(2, -3, -1))
+            for box, x0 in zip(row, range(-2, 3))
+        )
+        all_axes = VGroup(s[0] for s in all_solutions)
+        all_graphs = VGroup(s[1] for s in all_solutions)
+
+        self.remove(*(box.spring for row in box_grid for box in row))
+        self.add(all_axes)
+        self.play(ShowCreation(all_graphs, lag_ratio=1e-1, run_time=3))
+        self.wait()
+
+        # Highlight one
+        highlight = all_solutions[14].copy()
+        self.add(highlight)
+        self.play(all_solutions.animate.fade(0.75))
+        self.wait()
+
+    def get_spring_in_a_box(self, box, x0=0, v0=0, k=9, mu=0.5):
+        box_width = box.get_width()
+        spring = SrpingMassSystem(
+            x0=x0,
+            v0=v0,
+            k=k,
+            mu=mu,
+            mass_width=0.1 * box_width,
+            equilibrium_length=0.5 * box_width,
+            equilibrium_position=box.get_center(),
+            spring_radius=0.035 * box_width,
+        )
+        v_vect = spring.get_velocity_vector(v_offset=-box_width * 0.1, scale_factor=0.5)
+        spring.add(v_vect)
+        spring.v_vect = v_vect
+        spring.pause()
+        return spring
+
+    def get_solution_graph(self, box, x0=2, v0=0, k=9, mu=0.5, width_factor=0.8, graph_color=TEAL):
+        axes = Axes(
+            x_range=(0, self.graph_time, 1),
+            y_range=(-2, 2),
+            width=width_factor * box.get_width(),
+            height=box.get_height(),
+        )
+        axes.set_stroke(GREY, 1)
+        axes.next_to(box, DOWN)
+
+        s = 0.5 * (-mu + 1j * math.sqrt(4 * k - mu**2))
+        z0 = complex(
+            x0,
+            (s.real * x0 - v0) / s.imag
+        )
+
+        graph = axes.get_graph(
+            lambda t: (z0 * np.exp(s * t)).real,
+        )
+        graph.set_stroke(graph_color, 2)
+        return VGroup(axes, graph)
