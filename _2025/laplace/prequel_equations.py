@@ -1084,7 +1084,7 @@ class LetsGeneralize(InteractiveScene):
         morty = Mortimer()
         morty.to_corner(DR)
         self.play(
-            morty.says("Let’s\ngenerlize!", mode="hooray")
+            morty.says("Let’s\n  generalize!", mode="hooray")
         )
         self.play(Blink(morty))
         self.wait(3)
@@ -1555,3 +1555,67 @@ class LaplaceTransformAlgebra(InteractiveScene):
                 matched_keys=["X({s})"],
             )
         )
+
+
+class ContrastDumbTrickAndLT(InteractiveScene):
+    def construct(self):
+        # Test
+        kw = dict(font_size=60)
+        titles = VGroup(
+            Text("Dumb trick", **kw),
+            Text("Laplace Transform", **kw),
+        )
+        underlines = VGroup()
+        for x, title in zip([-1, 1], titles):
+            title.set_x(x * FRAME_WIDTH / 4)
+            title.to_edge(UP, buff=MED_SMALL_BUFF)
+            underlines.add(Underline(title))
+        underlines[0].scale(1.25)
+        underlines[1].shift(SMALL_BUFF * UP)
+
+        v_line = Line(UP, DOWN).set_height(FRAME_HEIGHT)
+
+        self.play(
+            LaggedStartMap(FadeIn, titles[::-1], lag_ratio=0.5),
+            LaggedStartMap(ShowCreation, underlines[::-1], lag_ratio=0.5),
+            ShowCreation(v_line, time_span=(0.5, 2.0)),
+            run_time=2
+        )
+        self.wait()
+
+
+class DifferentialEquationToAlgebra(InteractiveScene):
+    def construct(self):
+        # Associations
+        t2c = {"{s}": YELLOW}
+        arrow = Vector(1.5 * RIGHT, thickness=5)
+        words = VGroup(Text("ODE"), Text("Algebra"))
+        symbols = VGroup(Tex(R"d / dt"), Tex(R"\times {s}", t2c=t2c))
+        for group in words, symbols:
+            for mob, vect in zip(group, [LEFT, RIGHT]):
+                mob.next_to(arrow, vect)
+
+        deriv_eq = Tex(R"\frac{d}{dt} e^{{s}t} = {s} e^{{s} t}", t2c=t2c, font_size=36)
+        deriv_eq.next_to(arrow, UP, buff=0.25)
+
+        self.play(LaggedStart(
+            FadeIn(words[0], lag_ratio=0.1),
+            GrowArrow(arrow),
+            FadeIn(words[1], 0.25 * RIGHT),
+        ))
+        self.wait()
+        self.play(
+            FadeOut(words[0], 0.5 * UP),
+            FadeIn(symbols[0], 0.5 * UP),
+            FadeIn(deriv_eq)
+        )
+        self.play(
+            FadeOut(words[1], 0.5 * UP),
+            FadeIn(symbols[1], 0.5 * UP),
+        )
+        self.wait()
+
+
+class SimpleExp(InteractiveScene):
+    def construct(self):
+        self.add(Tex(R"e^{st}", t2c={"s": YELLOW}, font_size=60))

@@ -1,6 +1,13 @@
 from manim_imports_ext import *
 
 
+def get_coef_colors(n_coefs=3):
+    return [
+        interpolate_color_by_hsl(TEAL, RED, a)
+        for a in np.linspace(0, 1, n_coefs)
+    ]
+
+
 class SrpingMassSystem(VGroup):
     def __init__(
         self,
@@ -10,6 +17,7 @@ class SrpingMassSystem(VGroup):
         mu=0.1,
         equilibrium_length=7,
         equilibrium_position=ORIGIN,
+        direction=RIGHT,
         spring_stroke_color=GREY_B,
         spring_stroke_width=2,
         spring_radius=0.25,
@@ -20,7 +28,9 @@ class SrpingMassSystem(VGroup):
     ):
         super().__init__()
         self.equilibrium_position = equilibrium_position
-        self.fixed_spring_point = equilibrium_position + (equilibrium_length - 0.5 * mass_width) * LEFT
+        self.fixed_spring_point = equilibrium_position - (equilibrium_length - 0.5 * mass_width) * direction
+        self.direction = direction
+        self.rot_off_horizontal = angle_between_vectors(RIGHT, direction)
         self.mass = self.get_mass(mass_width, mass_color, mass_label)
         self.spring = self.get_spring(spring_stroke_color, spring_stroke_width, n_spring_curls, spring_radius)
         self.add(self.spring, self.mass)
@@ -40,6 +50,7 @@ class SrpingMassSystem(VGroup):
             stroke_color=stroke_color,
             stroke_width=stroke_width,
         )
+        spring.rotate(self.rot_off_horizontal)
         return spring
 
     def get_mass(self, mass_width, mass_color, mass_label):
@@ -55,10 +66,12 @@ class SrpingMassSystem(VGroup):
         return mass
 
     def set_x(self, x):
-        self.mass.move_to(self.equilibrium_position + x * RIGHT)
+        self.mass.move_to(self.equilibrium_position + x * self.direction)
         spring_width = SMALL_BUFF + get_norm(self.mass.get_left() - self.fixed_spring_point)
+        self.spring.rotate(-self.rot_off_horizontal)
         self.spring.set_width(spring_width, stretch=True)
-        self.spring.move_to(self.fixed_spring_point, LEFT)
+        self.spring.rotate(self.rot_off_horizontal)
+        self.spring.move_to(self.fixed_spring_point, -self.direction)
 
     def get_x(self):
         return (self.mass.get_center() - self.equilibrium_position)[0]
@@ -320,7 +333,7 @@ class SolveDampedSpringEquation(InteractiveScene):
             Text("Velocity").set_color(RED),
             Text("Acceleration").set_color(YELLOW),
         )
-        colors = [interpolate_color_by_hsl(TEAL, RED, a) for a in np.linspace(0, 1, 3)]
+        colors = get_coef_colors()
         for line, label, color in zip(funcs, labels, colors):
             label.set_color(color)
             label.next_to(line, RIGHT, MED_LARGE_BUFF)
@@ -862,9 +875,18 @@ class DampedSpringSolutionsOnSPlane(InteractiveScene):
         self.play(k_tracker.animate.set_value(4), run_time=2)
         self.play(FadeOut(exp_graph))
         self.wait()
-        for value in [2, 4.2, 0.5]:
-            self.play(mu_tracker.animate.set_value(value), run_time=3)
-            self.wait()
+        self.play(mu_tracker.animate.set_value(2), run_time=3)
+        self.play(k_tracker.animate.set_value(2), run_time=2)
+        self.wait()
+        self.play(mu_tracker.animate.set_value(3.5), run_time=3)
+        self.play(k_tracker.animate.set_value(5), run_time=2)
+        self.wait()
+        self.play(
+            mu_tracker.animate.set_value(0.5),
+            m_tracker.animate.set_value(3),
+            run_time=3
+        )
+        self.wait()
 
         # Smooth all the way to end
         self.play(mu_tracker.animate.set_value(4.2), run_time=12)
@@ -1042,10 +1064,12 @@ class RotatingExponentials(InteractiveScene):
         """Create a rotating vector for e^(st) on the given plane"""
         def update_vector(vector):
             t = t_tracker.get_value()
-            z = np.exp(s * t)
+            c = vector.coef_tracker.get_value()
+            z = c * np.exp(s * t)
             vector.put_start_and_end_on(plane.n2p(0), plane.n2p(z))
 
         vector = Arrow(LEFT, RIGHT, fill_color=color, thickness=thickness)
+        vector.coef_tracker = ComplexValueTracker(1)
         vector.add_updater(update_vector)
 
         return vector
@@ -1079,6 +1103,32 @@ class SimpleSolutionSummary(InteractiveScene):
 
 class ShowFamilyOfComplexSolutions(RotatingExponentials):
     def construct(self):
+        # Show the equation
+        frame = self.frame
+        frame.set_x(-10)
+
+        colors = get_coef_colors()
+        t2c = {"x''(t)": colors[2], "x'(t)": colors[1], "x(t)": colors[0]}
+        equation = Tex(R"m x''(t) + k x(t) = 0", t2c=t2c, font_size=42)
+        equation.next_to(frame.get_left(), RIGHT, buff=1.0)
+
+        arrow = Vector(3.0 * RIGHT, thickness=6, fill_color=GREY_B)
+        arrow.next_to(equation, RIGHT, MED_LARGE_BUFF)
+
+        strategy_words = VGroup(
+            Text("“Strategy”"),
+            TexText(R"Guess $e^{{s}t}$", t2c={R"{s}": YELLOW}, font_size=36, fill_color=GREY_A)
+        )
+        strategy_words.arrange(DOWN)
+        strategy_words.next_to(arrow, UP, MED_SMALL_BUFF)
+
+        self.add(equation)
+        self.play(
+            GrowArrow(arrow),
+            FadeIn(strategy_words, lag_ratio=0.1)
+        )
+        self.wait()
+
         # Show two basis solutions on the left
         t2c = {R"\omega": PINK}
         plane_config = dict(
@@ -1092,6 +1142,9 @@ class ShowFamilyOfComplexSolutions(RotatingExponentials):
         left_planes.arrange(DOWN, buff=1.0)
         left_planes.set_height(6.5)
         left_planes.to_corner(DL)
+        left_planes.set_z_index(-1)
+
+        left_planes_brace = Brace(left_planes, LEFT, MED_SMALL_BUFF)
 
         left_plane_labels = VGroup(
             Tex(R"e^{+i\omega}", t2c=t2c),
@@ -1112,27 +1165,350 @@ class ShowFamilyOfComplexSolutions(RotatingExponentials):
             for vect in rot_vects
         )
 
-        self.add(left_planes)
-        self.add(left_plane_labels)
+        self.add(rot_vects, tails)
         self.add(t_tracker)
-        self.add(rot_vects)
-        self.add(tails)
+        self.play(
+            GrowFromCenter(left_planes_brace),
+            FadeIn(left_planes),
+            FadeTransform(strategy_words[1][R"e^{{s}t}"].copy(), left_plane_labels[0]),
+            FadeTransform(strategy_words[1][R"e^{{s}t}"].copy(), left_plane_labels[1]),
+            VFadeIn(rot_vects),
+        )
+        self.wait(3)
 
-        self.wait(4)
+        self.wait(8)
 
         # Show combination with tunable parameters
         right_plane = ComplexPlane((-3, 3), (-3, 3), **plane_config)
         right_plane.set_height(5.5)
-        right_plane.next_to(left_planes, RIGHT, aligned_edge=DOWN, buff=2.5)
+        right_plane.next_to(left_planes, RIGHT, buff=1.5)
 
-        self.add(right_plane)
+        scaled_solution = Tex(
+            R"c_1 e^{+i\omega} + c_2 e^{-i\omega}",
+            t2c={R"\omega": PINK, "c_1": BLUE, "c_2": BLUE}
+        )
+        scaled_solution.next_to(right_plane, UP)
 
-        pass
+        vect1, vect2 = right_rot_vects = VGroup(
+            self.get_rotating_vector(right_plane, u * 1j * TAU / 4, t_tracker, color, 3)
+            for u, color in zip([+1, -1], [TEAL, RED])
+        )
+        right_rot_vects[1].add_updater(lambda m: m.shift(right_rot_vects[0].get_end() - m.get_start()))
+
+        c1_eq, c2_eq = coef_eqs = VGroup(
+            VGroup(Tex(fR"c_{n} = "), DecimalNumber(1))
+            for n in [1, 2]
+        )
+        coef_eqs.scale(0.85)
+        for coef_eq in coef_eqs:
+            coef_eq.arrange(RIGHT, buff=SMALL_BUFF)
+            coef_eq[1].align_to(coef_eq[0][0], DOWN)
+            coef_eq[0][:2].set_fill(BLUE)
+        coef_eqs.arrange(DOWN, MED_LARGE_BUFF)
+        coef_eqs.to_corner(UR)
+        coef_eqs.shift(LEFT)
+
+        c1_eq[1].add_updater(lambda m: m.set_value(vect1.coef_tracker.get_value()))
+        c2_eq[1].add_updater(lambda m: m.set_value(vect2.coef_tracker.get_value()))
+
+        self.play(
+            FadeIn(right_plane),
+            FadeOut(left_planes_brace),
+            frame.animate.center(),
+            run_time=2
+        )
+        self.play(LaggedStart(
+            FadeTransform(left_plane_labels[0].copy(), scaled_solution[R"e^{+i\omega}"]),
+            FadeIn(scaled_solution[R"c_1"]),
+            TransformFromCopy(rot_vects[0], right_rot_vects[0], suspend_mobject_updating=True),
+            FadeTransform(left_plane_labels[1].copy(), scaled_solution[R"e^{-i\omega}"]),
+            FadeIn(scaled_solution[R"+"][1]),
+            FadeIn(scaled_solution[R"c_2"]),
+            TransformFromCopy(rot_vects[1], right_rot_vects[1], suspend_mobject_updating=True)
+        ))
+        self.play(LaggedStart(
+            FadeTransformPieces(scaled_solution[R"c_1"].copy(), c1_eq),
+            FadeTransformPieces(scaled_solution[R"c_2"].copy(), c2_eq)
+        ))
+        self.play(LaggedStart(
+            vect1.coef_tracker.animate.set_value(2),
+            vect2.coef_tracker.animate.set_value(0.5),
+            lag_ratio=0.5
+        ))
+
+        comb_tail = TracingTail(vect2.get_end, stroke_color=YELLOW, time_traced=2)
+        glow_dot = GlowDot()
+        glow_dot.f_always.move_to(vect2.get_end)
+        self.add(comb_tail)
+        self.play(FadeIn(glow_dot))
+
+        self.wait(6)
+        self.play(LaggedStart(
+            vect1.coef_tracker.animate.set_value(complex(1.5, 1)),
+            vect2.coef_tracker.animate.set_value(complex(0.5, -1.25)),
+        ))
+        self.wait(8)
+
+        # Change the coefficients
+        t_tracker.suspend_updating()
+        self.play(
+            FadeOut(comb_tail, suspend_mobject_updating=True),
+            LaggedStart(
+                vect1.coef_tracker.animate.set_value(complex(0.31, -0.41)),
+                vect2.coef_tracker.animate.set_value(complex(2.71, -0.82)),
+            ),
+        )
+        self.wait()
+        self.play(
+            LaggedStart(
+                vect1.coef_tracker.animate.set_value(complex(-1.03, 0.5)),
+                vect2.coef_tracker.animate.set_value(complex(1.5, 0.35)),
+            ),
+        )
+        self.add(comb_tail)
+        self.wait(2)
+        t_tracker.resume_updating()
+
+        # Zoom out
+        self.play(frame.animate.set_height(13.75, about_edge=RIGHT), run_time=2)
+        self.wait(4)
+        self.play(frame.animate.to_default_state(), run_time=2)
+
+        # Go to real valued
+        self.play(
+            LaggedStart(
+                vect1.coef_tracker.animate.set_value(1),
+                vect2.coef_tracker.animate.set_value(1),
+            ),
+        )
+        self.wait(6)
+
+        # Show initial conditions
+        initial_conditions = VGroup(
+            Tex(R"x_0 = 0.00"),
+            Tex(R"v_0 = 0.00"),
+        )
+        x0_value = initial_conditions[0].make_number_changeable("0.00")
+        v0_value = initial_conditions[1].make_number_changeable("0.00")
+        x0_value.set_value(2)
+        initial_conditions.scale(0.85)
+        initial_conditions.arrange(DOWN)
+        initial_conditions.move_to(coef_eqs, LEFT)
+        initial_conditions.to_edge(UP)
+        implies = Tex(R"\Downarrow", font_size=72)
+        implies.next_to(initial_conditions, DOWN)
+
+        t_tracker.suspend_updating()
+        t_tracker.set_value((t_tracker.get_value() + 2) % 4 - 2)
+        self.play(
+            FadeIn(initial_conditions),
+            Write(implies),
+            coef_eqs.animate.next_to(implies, DOWN).align_to(initial_conditions, LEFT),
+        )
+        self.remove(comb_tail)
+        self.play(
+            vect1.coef_tracker.animate.set_value(1),
+            vect2.coef_tracker.animate.set_value(1),
+            t_tracker.animate.set_value(0),
+        )
+        self.wait()
+        self.remove(comb_tail)
+
+        # Highlight values, rise
+        t_tracker.resume_updating()
+
+        highlight_rect = SurroundingRectangle(initial_conditions[0])
+        highlight_rect.set_stroke(YELLOW, 2)
+
+        self.play(ShowCreation(highlight_rect))
+        self.wait()
+        self.play(highlight_rect.animate.surround(initial_conditions[1]))
+        self.wait()
+        self.play(highlight_rect.animate.surround(coef_eqs))
+        self.wait(4)
+
+        self.play(
+            vect1.coef_tracker.animate.set_value(1.5),
+            vect2.coef_tracker.animate.set_value(1.5),
+            ChangeDecimalToValue(x0_value, 3)
+        )
+        self.wait(12)
+
+    def add_scale_tracker(vector, initial_value=1):
+        """
+        Assumes the vector has another updater constantly setting a location in the plane
+        """
+        vector.c_tracker = ComplexValueTracker(initial_value)
+
+        def update_vector(vect):
+            c = vect.c_tracker.get_value()
+            vect.scale()
+            pass
+
+
+class GuessSine(InteractiveScene):
+    func_name = R"\sin"
+
+    def construct(self):
+        # Set up
+        self.frame.set_height(9, about_edge=LEFT)
+        func_name = self.func_name
+        func_tex = Rf"{func_name}(\omega t)"
+
+        t2c = {R"\omega": PINK, "x(t)": TEAL, "x''(t)": RED}
+        equation = Tex(R"m x''(t) + k x(t) = 0", t2c=t2c)
+        equation.to_edge(LEFT)
+        guess_words = TexText(Rf"Try $x(t) = {func_tex}$", t2c=t2c, font_size=36)
+
+        arrow = Arrow(guess_words.get_left(), guess_words.get_right(), buff=-0.1, thickness=6)
+        arrow.next_to(equation, RIGHT)
+        guess_words.next_to(arrow, UP, SMALL_BUFF)
+
+        self.add(equation)
+        self.add(arrow)
+        self.add(guess_words)
+
+        # Sub
+        sub = Tex(fR"-m \omega^2 {func_tex}  + k {func_tex} = 0", t2c=t2c)
+        sub.next_to(arrow, RIGHT)
+        simple_sub = Tex(Rf"\left(-m \omega^2 + k\right) {func_tex} = 0", t2c=t2c)
+        simple_sub.next_to(arrow, RIGHT)
+        implies = Tex(R"\Rightarrow", font_size=72)
+        implies.next_to(simple_sub, RIGHT)
+
+        t2c[R"\ding{51}"] = GREEN
+        t2c["Valid"] = GREEN
+        result = TexText(R"\ding{51} Valid if $\omega = \sqrt{k / m}$", t2c=t2c, font_size=36)
+        result.next_to(simple_sub, DOWN)
+
+        simple_sub.shift(0.05 * UP)
+        blank_sub = sub.copy()
+        blank_sub[func_tex].set_opacity(0)
+        func_parts = sub[func_tex]
+
+        self.play(LaggedStart(
+            TransformMatchingTex(equation.copy(), blank_sub, path_arc=30 * DEG, run_time=2),
+            FadeTransform(guess_words[func_tex][0].copy(), func_parts[0]),
+            FadeTransform(guess_words[func_tex][0].copy(), func_parts[1]),
+            lag_ratio=0.25
+        ))
+        self.wait()
+        self.play(
+            TransformMatchingTex(blank_sub, simple_sub),
+            Transform(func_parts[0], simple_sub[func_tex][0], path_arc=-30 * DEG),
+            Transform(func_parts[1], simple_sub[func_tex][0], path_arc=-30 * DEG),
+            run_time=1
+        )
+        self.wait()
+        self.play(FadeIn(result, 0.5 * UP))
+        self.wait()
+
+
+class GuessCosine(GuessSine):
+    func_name = R"\cos"
 
 
 class ShowFamilyOfRealSolutions(InteractiveScene):
+    t2c = {R"\omega": PINK}
+    omega = PI
+    x_max = 10
+
     def construct(self):
-        pass
+        # Add cosine and sine graphs up top
+        cos_graph, sin_graph = small_graphs = VGroup(
+            self.get_small_graph(math.cos, R"\cos(\omega t)", BLUE),
+            self.get_small_graph(math.sin, R"\sin(\omega t)", RED),
+        )
+        small_graphs.arrange(RIGHT, buff=LARGE_BUFF)
+        small_graphs.to_edge(UP, buff=MED_SMALL_BUFF)
+
+        self.add(small_graphs)
+
+        # Add master graph
+        coef_trackers = ValueTracker(1).replicate(2)
+
+        def func(t):
+            c1 = coef_trackers[0].get_value()
+            c2 = coef_trackers[1].get_value()
+            return c1 * np.cos(self.omega * t) + c2 * np.sin(self.omega * t)
+
+        axes = Axes((0, self.x_max), (-3, 3), width=self.x_max, height=4)
+        axes.to_edge(DOWN)
+        graph_label = Tex(R"+1.00 \cos(\omega t) +1.00 \sin(\omega t)", t2c=self.t2c)
+        graph_label.next_to(axes.y_axis.get_top(), UR)
+        coef_labels = graph_label.make_number_changeable("+1.00", replace_all=True, edge_to_fix=RIGHT, include_sign=True)
+        coef_labels.set_color(YELLOW)
+        coef_labels[0].add_updater(lambda m: m.set_value(coef_trackers[0].get_value()))
+        coef_labels[1].add_updater(lambda m: m.set_value(coef_trackers[1].get_value()))
+
+        graph = axes.get_graph(func)
+        graph.set_stroke(TEAL, 5)
+        axes.bind_graph_to_func(graph, func)
+
+        self.add(axes)
+        self.add(graph_label)
+        self.add(graph)
+
+        # Tweak the parameters
+        for c1, c2 in [(-0.5, 2), (1.5, 0), (0.25, -2)]:
+            self.play(LaggedStart(
+                coef_trackers[0].animate.set_value(c1),
+                coef_trackers[1].animate.set_value(c2),
+                lag_ratio=0.5
+            ))
+            self.wait()
+
+        # Tweak with spring
+        for c1, c2 in [(1.6, 1.8), (-2.7, 0.18), (0.5, -2)]:
+            self.play(LaggedStart(
+                coef_trackers[0].animate.set_value(c1),
+                coef_trackers[1].animate.set_value(c2),
+                lag_ratio=0.5
+            ))
+            self.show_spring(axes, graph, func)
+
+    def get_small_graph(self, func, func_name, color):
+        axes = Axes((0, 6), (-2, 2), height=2, width=6)
+        graph = axes.get_graph(lambda t: func(self.omega * t))
+        graph.set_stroke(color, 3)
+        label = Tex(func_name, t2c=self.t2c, font_size=36)
+        label.move_to(axes, UP)
+
+        return VGroup(axes, graph, label)
+
+    def show_spring(self, axes, graph, func):
+        graph_copy = graph.copy()
+        graph_copy.clear_updaters()
+
+        spring = SrpingMassSystem(
+            equilibrium_length=4,
+            equilibrium_position=axes.get_right() + RIGHT,
+            direction=UP,
+            mass_width=0.75,
+            spring_radius=0.2,
+        )
+        spring.add_updater(
+            lambda m: m.set_x(axes.y_axis.get_unit_size() * axes.y_axis.p2n(graph_copy.get_end()))
+        )
+
+        h_line = Line()
+        h_line.set_stroke(WHITE, 1)
+        h_line.f_always.put_start_and_end_on(
+            spring.mass.get_left,
+            graph_copy.get_end,
+        )
+
+        self.play(
+            graph.animate.set_stroke(opacity=0.2),
+            ShowCreation(graph_copy, rate_func=linear, run_time=self.x_max),
+            VFadeIn(spring, run_time=1),
+            VFadeIn(h_line, run_time=1),
+        )
+        self.play(FadeOut(spring), FadeOut(h_line))
+        self.wait()
+
+        self.remove(graph_copy, spring, h_line)
+        graph.set_stroke(opacity=1)
 
 
 class SetOfInitialConditions(InteractiveScene):
