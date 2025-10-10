@@ -1,8 +1,27 @@
 from manim_imports_ext import *
+from _2025.laplace.shm import ShowFamilyOfComplexSolutions
 
 
 S_COLOR = YELLOW
 T_COLOR = BLUE
+
+
+def get_exp_graph_icon(s, t_range=(0, 7), y_max=4, pos_real_scalar=0.1, neg_real_scalar=0.2, width=1, height=1):
+    axes = Axes(
+        t_range,
+        (-y_max, y_max),
+        width=width,
+        height=height,
+        axis_config=dict(tick_size=0.035, stroke_width=1)
+    )
+    scalar = pos_real_scalar if s.real > 0 else neg_real_scalar
+    new_s = complex(s.real * scalar, s.imag)
+    graph = axes.get_graph(lambda t: np.exp(new_s * t).real)
+    graph.set_stroke(YELLOW, 2)
+    rect = SurroundingRectangle(axes)
+    rect.set_fill(BLACK, 1)
+    rect.set_stroke(WHITE, 1)
+    return VGroup(rect, axes, graph)
 
 
 class IntroduceEulersFormula(InteractiveScene):
@@ -624,6 +643,13 @@ class AltComplexExpGraph(ComplexExpGraph):
 
 class SPlane(InteractiveScene):
     tex_to_color_map = {"s": YELLOW, "t": BLUE, R"\omega": PINK}
+    s_plane_x_range = (-2, 2)
+    s_label_font_size = 36
+    s_label_config = dict(
+        hide_zero_components_on_complex=True,
+        include_sign=True,
+        num_decimal_places=1,
+    )
 
     def construct(self):
         # Trackers
@@ -871,20 +897,23 @@ class SPlane(InteractiveScene):
 
         # Tour various values on the s plane
         values = [
-            -0.1 - 2j,
             -0.1 + 2j,
+            -0.1 - 2j,
             -0.1 + 0.5j,
-            +0.1 + 0.5j,
+            +0.05 + 0.5j,
             -0.5 + 0.5j,
             -0.1 + 0.5j,
         ]
         for value in values:
             self.play(s_tracker.animate.set_value(value), run_time=5)
+            if value == values[0]:
+                self.play_time_forward(TAU)
+                self.t_tracker.set_value(0)
 
         self.play_time_forward(4 * TAU)
 
     def get_s_plane(self):
-        s_plane = ComplexPlane((-2, 2), (-2, 2))
+        s_plane = ComplexPlane(self.s_plane_x_range, self.s_plane_x_range)
         s_plane.set_width(7)
         s_plane.to_edge(LEFT, buff=SMALL_BUFF)
         s_plane.add_coordinate_labels(font_size=16)
@@ -897,8 +926,8 @@ class SPlane(InteractiveScene):
         )
         s_dot.add_updater(lambda m: m.move_to(s_plane.n2p(get_s())))
 
-        s_label = Tex(R"s = +0.5", font_size=36)
-        s_rhs = s_label.make_number_changeable("+0.5", include_sign=True)
+        s_label = Tex(R"s = +0.5", font_size=self.s_label_font_size)
+        s_rhs = s_label.make_number_changeable("+0.5", **self.s_label_config)
         s_rhs.f_always.set_value(get_s)
         s_label.set_color(S_COLOR)
         s_label.set_backstroke(BLACK, 5)
@@ -906,10 +935,8 @@ class SPlane(InteractiveScene):
 
         return Group(s_dot, s_label)
 
-    def get_exp_plane(self):
-        tex_kw = dict(t2c={"s": YELLOW, "t": BLUE})
-
-        exp_plane = ComplexPlane((-2, 2), (-2, 2))
+    def get_exp_plane(self, x_range=(-2, 2)):
+        exp_plane = ComplexPlane(x_range, x_range)
         exp_plane.background_lines.set_stroke(width=1)
         exp_plane.faded_lines.set_stroke(opacity=0.25)
         exp_plane.set_width(4)
@@ -917,22 +944,27 @@ class SPlane(InteractiveScene):
 
         return exp_plane
 
-    def get_exp_plane_label(self, exp_plane):
-        label = Tex(R"e^{st}", font_size=60, t2c=self.tex_to_color_map)
+    def get_exp_plane_label(self, exp_plane, font_size=60):
+        label = Tex(R"e^{st}", font_size=font_size, t2c=self.tex_to_color_map)
         label.set_backstroke(BLACK, 5)
         label.next_to(exp_plane.get_corner(UL), DL, 0.2)
         return label
 
-    def get_output_dot_and_label(self, exp_plane, get_s, get_t):
-        output_dot = GlowDot(color=GREEN)
+    def get_output_dot_and_label(self, exp_plane, get_s, get_t, label_direction=UR, s_tex="s"):
+        output_dot = Group(
+            TrueDot(color=GREEN),
+            GlowDot(color=GREEN)
+        )
         output_dot.add_updater(lambda m: m.move_to(exp_plane.n2p(np.exp(get_s() * get_t()))))
 
-        output_label = Tex(R"e^{s \cdot 0.00}", font_size=36, t2c=self.tex_to_color_map)
+        output_label = Tex(Rf"e^{{{s_tex} \cdot 0.00}}", font_size=36, t2c=self.tex_to_color_map)
         t_label = output_label.make_number_changeable("0.00")
         t_label.set_color(BLUE)
-        t_label.match_height(output_label["s"], about_edge=LEFT)
+        s_term = output_label["s"][0][0]
+        t_label.set_height(s_term.get_height() * 1.2, about_edge=LEFT)
         t_label.f_always.set_value(get_t)
-        output_label.always.next_to(output_dot, UP, SMALL_BUFF, LEFT).shift(0.2 * DR)
+        t_label.always.match_y(s_term, DOWN)
+        output_label.always.next_to(output_dot, label_direction, buff=SMALL_BUFF, aligned_edge=LEFT, index_of_submobject_to_align=0),
         output_label.set_backstroke(BLACK, 3)
 
         return Group(output_dot, output_label)
@@ -1016,6 +1048,21 @@ class SPlane(InteractiveScene):
         return VGroup(p_vect, v_vect)
 
     ###
+
+    def setup_for_square_frame(self):
+        # For an insert
+        axes.next_to(s_plane, UP, LARGE_BUFF, aligned_edge=LEFT)
+        exp_plane.match_height(s_plane).next_to(s_plane, RIGHT, buff=1.5)
+        exp_plane_label.set_height(1).next_to(exp_plane, RIGHT, aligned_edge=UP)
+        output_label.set_fill(opacity=0).set_stroke(opacity=0)
+        self.add(exp_plane_label)
+
+        axes[:-2].stretch(2.5, 1, about_edge=DOWN)
+        axes.x_axis.ticks.stretch(1 / 2.5, 1)
+        axes[-2].next_to(axes.x_axis.get_right(), UP, MED_SMALL_BUFF)
+        axes[-1].next_to(axes.y_axis.get_top(), RIGHT, MED_SMALL_BUFF)
+
+        self.frame.reorient(0, 0, 0, (1.0, 2.68, 0.0), 16.00)
 
     def old_material(self):
         # Collapse the graph
@@ -1438,6 +1485,10 @@ class BreakingDownFunctions(ForcedOscillatorSolutionForm):
             Text("Decay", font_size=36).next_to(arrows[1], UP, buff=0),
             Text("Oscillation", font_size=36).rotate(-90 * DEG).next_to(arrows[3], RIGHT, buff=SMALL_BUFF),
         )
+        rot_vect = Vector(2 * RIGHT, fill_color=RED, thickness=5)
+        rot_vect.shift(out_plane.n2p(0) - rot_vect.get_start())
+        rot_vect.rotate(-45 * DEG, about_point=out_plane.n2p(0))
+        rot_vect.add_updater(lambda m, dt: m.rotate(2 * dt, about_point=out_plane.n2p(0)))
 
         self.play(
             s_dot.animate.shift(0.2 * RIGHT).set_anim_args(run_time=1),
@@ -1450,12 +1501,14 @@ class BreakingDownFunctions(ForcedOscillatorSolutionForm):
             FadeIn(arrow_labels[1]),
         )
         self.play(
-            s_dot.animate.shift(3 * DOWN).set_anim_args(run_time=4, rate_func=there_and_back),
+            # s_dot.animate.shift(3 * DOWN).set_anim_args(run_time=4, rate_func=there_and_back),
             GrowArrow(arrows[2]),
             GrowArrow(arrows[3]),
             FadeIn(arrow_labels[2]),
+            VFadeIn(rot_vect)
         )
         self.wait()
+        self.play(VFadeOut(rot_vect))
 
         # Show multiple s
         frame = self.frame
@@ -1488,7 +1541,8 @@ class BreakingDownFunctions(ForcedOscillatorSolutionForm):
 
         self.play(
             FlashAround(N, time_width=1),
-            Transform(N, inf, run_time=1.5, path_arc=90 * DEG),
+            # Transform(N, inf, path_arc=20 * DEG),
+            FadeTransform(N, inf, path_arc=20 * DEG),
             ShowIncreasingSubsets(dot_line, run_time=5, rate_func=linear),
             ReplacementTransform(s_dots, dot_line[:len(s_dots)].copy().set_opacity(0))
         )
@@ -1522,3 +1576,398 @@ class BreakingDownFunctions(ForcedOscillatorSolutionForm):
             ShowCreation(line, run_time=2),
         )
         self.wait()
+
+
+class Thumbnail(InteractiveScene):
+    def construct(self):
+        # Spiral
+        spiral_color = TEAL
+        s = -0.15 + 2j
+        max_t = 3
+        thick_stroke_width = (5, 25)
+
+        plane = ComplexPlane(
+            (-4, 4),
+            (-2, 2)
+        )
+        plane.set_height(11)
+        plane.center()
+        plane.add_coordinate_labels(font_size=24)
+
+        plane.axes.set_stroke(WHITE, 5)
+        plane.background_lines.set_stroke(BLUE, 3)
+        plane.faded_lines.set_stroke(BLUE, 2, 0.25)
+
+        curve = ParametricCurve(
+            lambda t: plane.n2p(np.exp(s * t)),
+            t_range=(0, 40, 0.1)
+        )
+        partial_curve = ParametricCurve(
+            lambda t: plane.n2p(np.exp(s * t)),
+            t_range=(0, max_t, 0.1)
+        )
+        curve.set_stroke(spiral_color, 2, 0.5)
+        partial_curve.set_stroke(spiral_color, width=thick_stroke_width, opacity=(0.5, 1))
+
+        dot = Group(TrueDot(radius=0.2), GlowDot(radius=0.75))
+        dot.set_color(spiral_color)
+        dot.move_to(partial_curve.get_end())
+
+        self.add(plane, curve)
+        self.add(partial_curve)
+        self.add(dot)
+
+        vectors = VGroup(
+            self.get_vector(plane, s, t, color=BLUE)
+            for t in np.linspace(0, max_t, 10)
+        )
+        self.add(vectors)
+
+    def get_vector(self, plane, s, t, scale_factor=0.5, thickness=5, color=YELLOW):
+        vect = Vector(RIGHT, thickness=thickness, fill_color=color)
+        vect.put_start_and_end_on(plane.n2p(0), scale_factor * plane.n2p(s * np.exp(s * t)))
+        vect.shift(plane.n2p(np.exp(s * t)) - plane.n2p(0))
+        return vect
+
+    def get_formula(self):
+        # Formula
+        formula = Tex(R"e^{st}", t2c={"s": YELLOW, "t": BLUE}, font_size=200)
+        formula.next_to(plane, LEFT, buff=2.0)
+
+        s_rect = SurroundingRectangle(formula["s"], buff=0.1)
+        s_rect.set_stroke(WHITE, 2)
+
+        abi = Tex("a + bi", font_size=72)
+        abi.next_to(formula, UP, LARGE_BUFF)
+        abi.to_edge(LEFT, buff=LARGE_BUFF)
+
+        arrow = Arrow(s_rect.get_top(), abi.get_corner(DR), buff=0.05)
+
+        self.add(formula)
+        self.add(s_rect)
+        self.add(arrow)
+        self.add(abi)
+
+
+class Thumbnail2(InteractiveScene):
+    def construct(self):
+        # Test
+        theta = 140 * DEG
+        z = np.exp(theta * 1j)
+
+        plane_color = BLUE
+        path_color = YELLOW
+        vect_color = WHITE
+
+        plane = ComplexPlane(
+            (-4, 4),
+            (-2, 2)
+        )
+        plane.set_height(10)
+        plane.center()
+        plane.add_coordinate_labels(font_size=24)
+        plane.axes.set_stroke(WHITE, 3)
+        plane.background_lines.set_stroke(plane_color, 4)
+        plane.faded_lines.set_stroke(plane_color, 3, 0.35)
+
+        unit_size = plane.x_axis.get_unit_size()
+
+        arrow = Arrow(
+            plane.n2p(1),
+            plane.n2p(z),
+            buff=0,
+            path_arc=theta,
+            thickness=12,
+            fill_color=YELLOW,
+        )
+        arrow.scale(0.965, about_point=plane.n2p(1))
+        arrow.set_fill(border_width=3)
+
+        path = Arc(0, theta, radius=unit_size)
+        path.set_stroke(path_color, width=(2, 30))
+        dot = Group(TrueDot(radius=0.2), GlowDot(radius=0.75))
+        dot.set_color(path_color)
+        dot.move_to(path.get_end())
+
+        n_vects = 8
+        vectors = VGroup(
+            Vector(2.5 * UP, thickness=8).set_fill(vect_color, opacity**2).put_start_on(plane.n2p(1)).rotate(phi, about_point=plane.n2p(0))
+            for phi, opacity in zip(np.linspace(0, theta, n_vects), np.linspace(0.5, 1, n_vects))
+        )
+        vectors.set_fill(border_width=3)
+
+        circle = Circle(radius=unit_size)
+        circle.set_stroke(GREY, 5)
+
+        d_line = DashedLine(plane.n2p(0), plane.n2p(z))
+        d_line.set_stroke(WHITE, 3)
+        arc = Arc(0, theta, radius=0.5)
+        arc.set_stroke(WHITE, 5)
+        theta_label = Tex(R"\theta", font_size=72)
+        theta_label.next_to(arc.pfp(0.5), UR, SMALL_BUFF)
+
+        self.add(plane)
+        self.add(circle)
+        self.add(d_line)
+        self.add(vectors)
+        self.add(path)
+        self.add(dot)
+        self.add(arc)
+        self.add(theta_label)
+
+
+### For Main Laplace video
+
+
+class RecapSPlane(SPlane):
+    def construct(self):
+        # Trackers
+        s_tracker = self.s_tracker = ComplexValueTracker(-1)
+        t_tracker = self.t_tracker = ValueTracker(0)
+        get_s = s_tracker.get_value
+        get_t = t_tracker.get_value
+
+        # Add s plane
+        s_plane = self.get_s_plane()
+        s_dot, s_label = self.get_s_dot_and_label(s_plane, get_s)
+        self.add(s_plane, s_dot, s_label)
+
+        # Add exp plane
+        exp_plane = self.get_exp_plane()
+        exp_plane_label = self.get_exp_plane_label(exp_plane)
+        output_dot, output_label = self.get_output_dot_and_label(exp_plane, get_s, get_t)
+        output_path = self.get_output_path(exp_plane, get_t, get_s)
+        output_path.set_clip_plane(RIGHT, -s_plane.get_x(RIGHT))
+
+        max_t = 50
+        output_path_preview = self.get_output_path(exp_plane, lambda: max_t, get_s)
+        output_path_preview.set_stroke(opacity=0.5)
+        for path in [output_path, output_path_preview]:
+            path.set_clip_plane(RIGHT, -s_plane.get_x(RIGHT))
+
+        self.add(exp_plane, exp_plane_label, output_path_preview, output_path, output_dot, output_label)
+
+        # Add e^{st} graph
+        axes = self.get_graph_axes()
+        axes.x_axis.scale(0.5, 0, about_edge=LEFT)
+        graph = self.get_dynamic_exp_graph(axes, get_s)
+        v_line = self.get_graph_v_line(axes, get_t, get_s)
+        graph.set_clip_plane(UP, -axes.get_y(DOWN))
+        v_line.set_clip_plane(UP, -axes.get_y(DOWN))
+        axes_background = BackgroundRectangle(axes)
+        axes_background.set_fill(BLACK, 1)
+        axes_background.align_to(s_plane.get_right(), LEFT).shift(1e-2 * RIGHT)
+        axes_background.stretch(1.2, 1, about_edge=DOWN)
+
+        self.add(axes_background, axes, graph, v_line)
+
+        # Pre-preamble
+        s_tracker.set_value(-0.3)
+        self.play(s_tracker.animate.increment_value(1.5j), run_time=4)
+        self.play(t_tracker.animate.set_value(TAU / 1.5), run_time=5, rate_func=linear)
+        self.play(s_tracker.animate.set_value(1.5j), run_time=3)
+        t_tracker.set_value(0)
+
+        # Play around
+        s_tracker.set_value(0)
+        self.play(s_tracker.animate.increment_value(1.5j), run_time=4)
+        t_tracker.add_updater(lambda m, dt: m.increment_value(dt))
+        self.add(t_tracker)
+        self.wait(4.5)
+        self.play(s_tracker.animate.increment_value(-0.2))
+        self.wait(2)
+        for step in [-0.8, 1.2, -0.4]:
+            self.play(s_tracker.animate.increment_value(step), run_time=3)
+        self.wait()
+
+
+class DefineSPlane(SPlane):
+    def construct(self):
+        # Trackers
+        s_tracker = self.s_tracker = ComplexValueTracker(-1)
+        t_tracker = self.t_tracker = ValueTracker(0)
+        get_s = s_tracker.get_value
+        get_t = t_tracker.get_value
+
+        # Add s plane
+        s_plane = self.get_s_plane()
+        s_dot, s_label = self.get_s_dot_and_label(s_plane, get_s)
+        self.add(s_plane, s_dot, s_label)
+
+        # Add exp plane
+        exp_plane = self.get_exp_plane()
+        exp_plane_label = self.get_exp_plane_label(exp_plane)
+        output_dot, output_label = self.get_output_dot_and_label(exp_plane, get_s, get_t)
+        output_path = self.get_output_path(exp_plane, get_t, get_s)
+        output_path.set_clip_plane(RIGHT, -s_plane.get_x(RIGHT))
+
+        max_t = 50
+        output_path_preview = self.get_output_path(exp_plane, lambda: max_t, get_s)
+        output_path_preview.set_stroke(opacity=0.5)
+        for path in [output_path, output_path_preview]:
+            path.set_clip_plane(RIGHT, -s_plane.get_x(RIGHT))
+
+        self.add(exp_plane, exp_plane_label, output_path_preview, output_path, output_dot, output_label)
+
+        # Add e^{st} graph
+        axes = self.get_graph_axes()
+        axes.x_axis.scale(0.5, 0, about_edge=LEFT)
+        graph = self.get_dynamic_exp_graph(axes, get_s)
+        v_line = self.get_graph_v_line(axes, get_t, get_s)
+        graph.set_clip_plane(UP, -axes.get_y(DOWN))
+        v_line.set_clip_plane(UP, -axes.get_y(DOWN))
+        axes_background = BackgroundRectangle(axes)
+        axes_background.set_fill(BLACK, 1)
+        axes_background.align_to(s_plane.get_right(), LEFT).shift(1e-2 * RIGHT)
+        axes_background.stretch(1.2, 1, about_edge=DOWN)
+
+        self.add(axes_background, axes, graph, v_line)
+
+        # Go!
+        t_tracker.clear_updaters()
+        t_tracker.set_value(0)
+        t_tracker.add_updater(lambda m, dt: m.increment_value(dt))
+        self.add(t_tracker)
+        s_tracker.set_value(0)
+        self.play(s_tracker.animate.set_value(-0.1 + 1.5j), run_time=3)
+        self.wait(3)
+
+        # Name the plane
+        frame = self.frame
+        s_plane_name = Text("S-plane", font_size=90)
+        s_plane_name.next_to(s_plane, UP)
+        s_plane_name.set_color(YELLOW)
+
+        self.play(
+            frame.animate.reorient(0, 0, 0, (0.49, 0.34, 0.0), 9.65).set_anim_args(time_span=(0, 2)),
+            FlashAround(s_plane, time_width=1.5, buff=MED_SMALL_BUFF, stroke_width=5),
+            run_time=4,
+        )
+        self.wait()
+        self.play(s_tracker.animate.set_value(-0.2 - 1j), run_time=3)
+        self.wait()
+        self.play(Write(s_plane_name))
+        self.wait(3)
+
+        # Show exp pieces
+        s_samples = [complex(a, b) for a in range(-2, 3) for b in range(-2, 3)]
+        exp_pieces = VGroup(
+            get_exp_graph_icon(s).move_to(s_plane.n2p(0.85 * s))
+            for s in s_samples
+        )
+
+        dots = VGroup(Dot(radius=0.1).move_to(piece) for piece in exp_pieces)
+        dots.set_color(YELLOW)
+
+        self.play(
+            LaggedStartMap(FadeIn, dots, scale=5, lag_ratio=0.05, run_time=2),
+            VFadeOut(output_label),
+            FadeOut(output_dot),
+            VFadeOut(s_label),
+            FadeOut(s_dot),
+        )
+        t_tracker.clear_updaters()
+        self.wait()
+        self.play(LaggedStart(
+            (FadeTransform(dot, piece)
+            for dot, piece in zip(dots, exp_pieces)),
+            lag_ratio=0.05,
+            run_time=3,
+            group_type=Group,
+        ))
+        self.wait()
+
+        # Associate with complex
+        rect = SurroundingRectangle(exp_pieces[6], buff=SMALL_BUFF)
+        rect.set_stroke(TEAL, 3)
+
+        self.play(ShowCreation(rect))
+        self.wait()
+        self.play(rect.animate.surround(VGroup(exp_plane, exp_plane_label)))
+        self.play(FadeOut(rect))
+
+        # Go through imaginary partsg
+        rows = VGroup(exp_pieces[n::5] for n in range(0, 5))
+        for row in rows:
+            row.save_state()
+        self.play(rows.animate.fade(0.7))
+        self.play(Restore(rows[2]))
+        self.play(
+            rows[2].animate.fade(0.7),
+            Restore(rows[1]),
+            Restore(rows[3]),
+        )
+        self.play(
+            Restore(rows[0]),
+            Restore(rows[4]),
+            rows[1].animate.fade(0.7),
+            rows[3].animate.fade(0.7),
+        )
+        self.wait()
+        self.play(*(Restore(row) for row in rows))
+
+        # Show columns
+        cols = VGroup(exp_pieces[n:n + 5] for n in range(0, 25, 5))
+        for col in cols:
+            col.save_state()
+        last = VectorizedPoint()
+        self.play(cols.animate.fade(0.7))
+        for col in cols:
+            self.play(
+                last.animate.fade(0.7),
+                Restore(col),
+            )
+            last = col
+
+        self.play(*(Restore(col) for col in cols))
+        self.wait()
+
+
+class BreakingDownCosine(ShowFamilyOfComplexSolutions):
+    tex_to_color_map = {"+i": YELLOW, "-i": YELLOW}
+
+    def construct(self):
+        # Set up various planes
+        left_planes, left_plane_labels = self.get_left_planes(label_texs=[R"e^{+it}", R"e^{-it}"])
+        rot_vects, tails, t_tracker = self.get_rot_vects(left_planes)
+
+        right_plane = self.get_right_plane(x_range=(-2, 2))
+        right_plane.next_to(left_planes, RIGHT, buff=2.0)
+        right_plane.add_coordinate_labels(font_size=16)
+        vect_sum = self.get_rot_vect_sum(right_plane, t_tracker)
+        for vect in vect_sum:
+            vect.coef_tracker.set_value(0.5)
+
+        output_dot = Group(TrueDot(), GlowDot()).set_color(YELLOW)
+        output_dot.f_always.move_to(vect_sum[1].get_end)
+
+        self.add(t_tracker)
+        self.add(left_planes, left_plane_labels)
+        self.add(rot_vects, tails, t_tracker)
+
+        self.add(right_plane)
+        self.add(vect_sum)
+        self.add(output_dot)
+        self.wait(12)
+
+        # Show each part
+        for vect in vect_sum:
+            vect.coef_tracker.set_value(1)
+
+        inner_arrows = VGroup(Arrow(2 * v, v, buff=0) for v in compass_directions(8))
+        inner_arrows.set_fill(YELLOW)
+        inner_arrows.move_to(right_plane)
+
+        self.remove(vect_sum, output_dot)
+        for i in [0, 1]:
+            # self.play(ReplacementTransform(rot_vects[i].copy().clear_updaters(), vect_sum[i]))
+            self.play(TransformFromCopy(rot_vects[i], vect_sum[i], suspend_mobject_updating=True))
+            self.wait(3)
+
+        self.wait(15)
+        self.play(
+            *(vs.coef_tracker.animate.set_value(0.5) for vs in vect_sum),
+            LaggedStartMap(GrowArrow, inner_arrows, lag_ratio=1e-2, run_time=1)
+        )
+        self.play(FadeOut(inner_arrows))
+        self.wait(12)

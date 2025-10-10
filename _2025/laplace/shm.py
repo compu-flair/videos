@@ -806,7 +806,10 @@ class DampedSpringSolutionsOnSPlane(InteractiveScene):
 
         def update_lines(lines):
             for line, dot in zip(lines, root_dots):
-                line.put_start_and_end_on(s_rhs_point.get_center(), dot.get_center())
+                line.put_start_and_end_on(
+                    s_rhs_point.get_center(),
+                    dot.get_center(),
+                )
 
         lines = Line().replicate(2)
         lines.set_stroke(YELLOW, 2, 0.35)
@@ -826,13 +829,14 @@ class DampedSpringSolutionsOnSPlane(InteractiveScene):
         # Play with mu
         self.play(
             s_rhs_point.animate.move_to(rect_edge_point),
+            VFadeOut(lines),
             VFadeIn(sliders[1])
         )
         self.wait()
         self.play(mu_tracker.animate.set_value(3), run_time=5)
         self.wait()
         self.play(mu_tracker.animate.set_value(0.5), run_time=3)
-        self.wait()
+        self.play(ShowCreation(lines, lag_ratio=0, suspend_mobject_updating=True))
 
         # Background
         self.add_background_image()
@@ -1006,8 +1010,7 @@ class RotatingExponentials(InteractiveScene):
         self.play(
             VFadeOut(spring),
             VFadeOut(v_line),
-            VFadeOut(left_tail),
-            VFadeOut(right_tail),
+            VFadeOut(tails),
         )
 
         # Add them up
@@ -1102,6 +1105,14 @@ class SimpleSolutionSummary(InteractiveScene):
 
 
 class ShowFamilyOfComplexSolutions(RotatingExponentials):
+    tex_to_color_map = {R"\omega": PINK}
+    plane_config = dict(
+        background_line_style=dict(stroke_color=BLUE, stroke_width=1),
+        faded_line_style=dict(stroke_color=BLUE, stroke_width=0.5, stroke_opacity=0.25),
+    )
+    vect_colors = [TEAL, RED]
+    rotation_frequency = TAU / 4
+
     def construct(self):
         # Show the equation
         frame = self.frame
@@ -1130,40 +1141,10 @@ class ShowFamilyOfComplexSolutions(RotatingExponentials):
         self.wait()
 
         # Show two basis solutions on the left
-        t2c = {R"\omega": PINK}
-        plane_config = dict(
-            background_line_style=dict(stroke_color=BLUE, stroke_width=1),
-            faded_line_style=dict(stroke_color=BLUE, stroke_width=0.5, stroke_opacity=0.25),
-        )
-        left_planes = VGroup(
-            ComplexPlane((-1, 1), (-1, 1), **plane_config)
-            for _ in range(2)
-        )
-        left_planes.arrange(DOWN, buff=1.0)
-        left_planes.set_height(6.5)
-        left_planes.to_corner(DL)
-        left_planes.set_z_index(-1)
-
+        t2c = self.tex_to_color_map
+        left_planes, left_plane_labels = self.get_left_planes(label_texs=[R"e^{+i\omega t}", R"e^{-i\omega t}"])
+        rot_vects, tails, t_tracker = self.get_rot_vects(left_planes)
         left_planes_brace = Brace(left_planes, LEFT, MED_SMALL_BUFF)
-
-        left_plane_labels = VGroup(
-            Tex(R"e^{+i\omega}", t2c=t2c),
-            Tex(R"e^{-i\omega}", t2c=t2c),
-        )
-        for label, plane in zip(left_plane_labels, left_planes):
-            label.next_to(plane, UP, SMALL_BUFF)
-
-        t_tracker = ValueTracker()
-        t_tracker.add_updater(lambda m, dt: m.increment_value(dt))
-
-        rot_vects = VGroup(
-            self.get_rotating_vector(plane, u * 1j * TAU / 4, t_tracker, color, 3)
-            for plane, u, color in zip(left_planes, [+1, -1], [TEAL, RED])
-        )
-        left_tail, right_tail = tails = VGroup(
-            TracingTail(vect.get_end, stroke_color=vect.get_color(), time_traced=2)
-            for vect in rot_vects
-        )
 
         self.add(rot_vects, tails)
         self.add(t_tracker)
@@ -1179,22 +1160,16 @@ class ShowFamilyOfComplexSolutions(RotatingExponentials):
         self.wait(8)
 
         # Show combination with tunable parameters
-        right_plane = ComplexPlane((-3, 3), (-3, 3), **plane_config)
-        right_plane.set_height(5.5)
+        right_plane = self.get_right_plane()
         right_plane.next_to(left_planes, RIGHT, buff=1.5)
 
         scaled_solution = Tex(
-            R"c_1 e^{+i\omega} + c_2 e^{-i\omega}",
+            R"c_1 e^{+i\omega t} + c_2 e^{-i\omega t}",
             t2c={R"\omega": PINK, "c_1": BLUE, "c_2": BLUE}
         )
         scaled_solution.next_to(right_plane, UP)
 
-        vect1, vect2 = right_rot_vects = VGroup(
-            self.get_rotating_vector(right_plane, u * 1j * TAU / 4, t_tracker, color, 3)
-            for u, color in zip([+1, -1], [TEAL, RED])
-        )
-        right_rot_vects[1].add_updater(lambda m: m.shift(right_rot_vects[0].get_end() - m.get_start()))
-
+        vect1, vect2 = right_rot_vects = self.get_rot_vect_sum(right_plane, t_tracker)
         c1_eq, c2_eq = coef_eqs = VGroup(
             VGroup(Tex(fR"c_{n} = "), DecimalNumber(1))
             for n in [1, 2]
@@ -1218,10 +1193,10 @@ class ShowFamilyOfComplexSolutions(RotatingExponentials):
             run_time=2
         )
         self.play(LaggedStart(
-            FadeTransform(left_plane_labels[0].copy(), scaled_solution[R"e^{+i\omega}"]),
+            FadeTransform(left_plane_labels[0].copy(), scaled_solution[R"e^{+i\omega t}"]),
             FadeIn(scaled_solution[R"c_1"]),
             TransformFromCopy(rot_vects[0], right_rot_vects[0], suspend_mobject_updating=True),
-            FadeTransform(left_plane_labels[1].copy(), scaled_solution[R"e^{-i\omega}"]),
+            FadeTransform(left_plane_labels[1].copy(), scaled_solution[R"e^{-i\omega t}"]),
             FadeIn(scaled_solution[R"+"][1]),
             FadeIn(scaled_solution[R"c_2"]),
             TransformFromCopy(rot_vects[1], right_rot_vects[1], suspend_mobject_updating=True)
@@ -1247,7 +1222,7 @@ class ShowFamilyOfComplexSolutions(RotatingExponentials):
             vect1.coef_tracker.animate.set_value(complex(1.5, 1)),
             vect2.coef_tracker.animate.set_value(complex(0.5, -1.25)),
         ))
-        self.wait(8)
+        self.wait(7)
 
         # Change the coefficients
         t_tracker.suspend_updating()
@@ -1323,7 +1298,7 @@ class ShowFamilyOfComplexSolutions(RotatingExponentials):
         self.play(ShowCreation(highlight_rect))
         self.wait()
         self.play(highlight_rect.animate.surround(initial_conditions[1]))
-        self.wait()
+        self.wait(2)
         self.play(highlight_rect.animate.surround(coef_eqs))
         self.wait(4)
 
@@ -1333,6 +1308,55 @@ class ShowFamilyOfComplexSolutions(RotatingExponentials):
             ChangeDecimalToValue(x0_value, 3)
         )
         self.wait(12)
+
+    def get_left_planes(self, label_texs: list[str]):
+        planes = VGroup(
+            ComplexPlane((-1, 1), (-1, 1), **self.plane_config)
+            for _ in range(2)
+        )
+        planes.arrange(DOWN, buff=1.0)
+        planes.set_height(6.5)
+        planes.to_corner(DL)
+        planes.set_z_index(-1)
+
+        labels = VGroup(Tex(tex, t2c=self.tex_to_color_map) for tex in label_texs)
+        for label, plane in zip(labels, planes):
+            label.next_to(plane, UP, SMALL_BUFF)
+
+        return planes, labels
+
+    def get_rot_vects(self, planes):
+        t_tracker = ValueTracker(0)
+        t_tracker.add_updater(lambda m, dt: m.increment_value(dt))
+
+        rot_vects = VGroup(
+            self.get_rotating_vector(plane, u * 1j * self.rotation_frequency, t_tracker, color)
+            for plane, u, color in zip(planes, [+1, -1], self.vect_colors)
+        )
+        tails = VGroup(
+            TracingTail(vect.get_end, stroke_color=vect.get_color(), time_traced=2)
+            for vect in rot_vects
+        )
+
+        return Group(rot_vects, tails, t_tracker)
+
+    def get_rot_vect_sum(self, plane, t_tracker):
+        vect1, vect2 = vect_sum = VGroup(
+            self.get_rotating_vector(
+                plane,
+                u * 1j * self.rotation_frequency,
+                t_tracker,
+                color,
+            )
+            for u, color in zip([+1, -1], self.vect_colors)
+        )
+        vect2.add_updater(lambda m: m.put_start_on(vect1.get_end()))
+        return vect_sum
+
+    def get_right_plane(self, x_range=(-3, 3), height=5.5):
+        right_plane = ComplexPlane(x_range, x_range, **self.plane_config)
+        right_plane.set_height(height)
+        return right_plane
 
     def add_scale_tracker(vector, initial_value=1):
         """
