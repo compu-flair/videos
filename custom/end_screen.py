@@ -7,10 +7,12 @@ from pathlib import Path
 from manimlib.animation.animation import Animation
 from manimlib.animation.composition import Succession
 from manimlib.animation.composition import LaggedStartMap
+from manimlib.animation.composition import AnimationGroup
 from manimlib.animation.creation import Write
 from manimlib.animation.transform import ApplyMethod
 from manimlib.animation.indication import VShowPassingFlash
 from manimlib.animation.fading import FadeIn
+from manimlib.animation.fading import FadeOut
 from manimlib.animation.fading import VFadeIn
 from manimlib.constants import *
 from manimlib.mobject.mobject import Mobject
@@ -24,6 +26,7 @@ from manimlib.mobject.geometry import Square
 from manimlib.mobject.types.image_mobject import ImageMobject
 from manimlib.mobject.svg.tex_mobject import TexText
 from manimlib.mobject.svg.text_mobject import Text
+from manimlib.mobject.svg.drawings import SpeechBubble
 from manimlib.mobject.types.vectorized_mobject import VGroup
 from manimlib.mobject.types.vectorized_mobject import VMobject
 from manimlib.scene.scene import Scene
@@ -227,8 +230,9 @@ class SideScrollEndScreen(PatreonEndScreen):
         font_size=28,
     )
     early_view_text = """
-        Hey, psst, channel supporters
-        get early views of new videos.
+        Hey, psst, channel
+        supporters get early
+        views of new videos.
     """
     support_url = "https://3b1b.co/support"
 
@@ -274,8 +278,8 @@ class SideScrollEndScreen(PatreonEndScreen):
             Square().set_width(self.link_element_width),
         )
         screen.round_corners(radius=0.1)
-        channel.next_to(screen, RIGHT, MED_SMALL_BUFF)
-        link.next_to(screen, DOWN, buff=0.75, aligned_edge=LEFT)
+        link.next_to(screen, RIGHT, MED_SMALL_BUFF)
+        channel.next_to(screen, DOWN, buff=0.75, aligned_edge=LEFT)
 
         elements.move_to(self.panels[1])
         elements.set_stroke(self.line_color, 0)
@@ -285,35 +289,42 @@ class SideScrollEndScreen(PatreonEndScreen):
 
         # Link text
         link_text = Text(self.support_url, font_size=30)
-        link_text.next_to(link, DOWN)
+        link_text.next_to(link, UP)
         self.link_text = link_text
         self.add(link_text)
 
     def get_early_view_comment(self):
         link = self.elements[2]
         randy = Randolph(height=1.5)
-        randy.next_to(link.get_corner(DR), RIGHT, )
+        randy.flip()
+        randy.to_corner(DR).shift(0.25 * UP)
         randy.always.fix_in_frame()  # Why?
         blank = VMobject()
+
+        bubble = randy.get_bubble(
+            Text(self.early_view_text, font_size=20),
+            SpeechBubble,
+            direction=RIGHT
+        )
+        bubble.fix_in_frame()
+
         return Succession(
-            randy.says(
-                Text(self.early_view_text, font_size=24),
-                mode="tease",
-                look_at=self.link_text,
-                bubble_direction=LEFT
+            AnimationGroup(
+                Write(bubble),
+                randy.change("tease", self.link_text),
             ),
             Blink(randy),
-            Animation(blank, run_time=2),
-            randy.change("raise_left_hand", look_at=ORIGIN).set_anim_args(run_time=1),
-            Animation(blank, run_time=2),
-            Blink(randy),
-            Animation(blank, run_time=3),
-            Blink(randy),
+            Animation(blank, run_time=1),
+            bubble.animate.set_opacity(0),
+            randy.change("raise_left_hand", look_at=self.link_text).set_anim_args(run_time=1),
             Animation(blank, run_time=2),
             Blink(randy),
             Animation(blank, run_time=3),
             Blink(randy),
-            # Animation(blank, run_time=self.scroll_time - 14),
+            Animation(blank, run_time=2),
+            Blink(randy),
+            Animation(blank, run_time=3),
+            Blink(randy),
         )
 
     def add_thanks_and_names(self):
