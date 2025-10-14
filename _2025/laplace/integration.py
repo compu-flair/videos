@@ -1798,7 +1798,6 @@ class LaplaceTransformOfCos(BreakDownLaplaceTransform):
         self.play(s_tracker.animate.increment_value(-0.2j), run_time=6)
         self.play(s_tracker.animate.set_value(0.2j), run_time=3)
 
-
         # Pan
         self.play(frame.animate.reorient(-50, 67, 5, (0.47, -1.1, 1.08), 11.24), run_time=10)
 

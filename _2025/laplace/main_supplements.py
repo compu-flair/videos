@@ -684,37 +684,6 @@ class PonderingCosineMachine(InteractiveScene):
             self.wait(2)
 
 
-class NotWhatYouWouldSee(InteractiveScene):
-    def construct(self):
-        morty = Mortimer().flip()
-        morty.to_corner(DL)
-        self.play(
-            morty.says("Not the\nstandard form", mode="hesitant")
-        )
-        self.play(Blink(morty))
-        self.wait()
-        self.play(morty.debubble(mode="pondering", look_at=5 * UL))
-        self.play(Blink(morty))
-        self.wait()
-
-
-class CosLTLogicReversal(InteractiveScene):
-    def construct(self):
-        # Test
-        arrow = Tex(R"\rightarrow", font_size=120)
-        cos_lt = Tex(
-            R"\frac{s}{s^2 - \omega^2}",
-            font_size=90,
-            t2c={"s": YELLOW, R"\omega": PINK}
-        )
-        cos_lt.next_to(arrow, RIGHT, LARGE_BUFF)
-
-        self.add(arrow, cos_lt)
-        self.wait()
-        self.play(cos_lt.animate.next_to(arrow, LEFT, LARGE_BUFF).set_anim_args(path_arc=120 * DEG), run_time=3)
-        self.wait()
-
-
 class LaplaceFourierContrast(InteractiveScene):
     def construct(self):
         # Titles and definitions
@@ -746,3 +715,117 @@ class LaplaceFourierContrast(InteractiveScene):
             FadeIn(formulas, 0.5 * UP)
         )
         self.wait()
+
+
+class NotWhatYouWouldSee(InteractiveScene):
+    def construct(self):
+        morty = Mortimer().flip()
+        morty.to_corner(DL)
+        self.play(
+            morty.says("Not the\nstandard form", mode="hesitant")
+        )
+        self.play(Blink(morty))
+        self.wait()
+        self.play(morty.debubble(mode="pondering", look_at=5 * UL))
+        self.play(Blink(morty))
+        self.wait()
+
+
+class CosLTLogicReversal(InteractiveScene):
+    def construct(self):
+        # Test
+        self.add(FullScreenRectangle().set_fill(GREY_E, 0.5))
+        arrow = Tex(R"\rightarrow", font_size=120)
+        cos_lt = Tex(
+            R"\frac{s}{s^2 + \omega^2}",
+            font_size=90,
+            t2c={"s": YELLOW, R"\omega": PINK}
+        )
+        cos_lt.next_to(arrow, RIGHT, LARGE_BUFF)
+
+        self.add(arrow, cos_lt)
+        self.wait()
+        self.play(cos_lt.animate.next_to(arrow, LEFT, LARGE_BUFF).set_anim_args(path_arc=120 * DEG), run_time=3)
+        self.wait()
+
+
+class CosineEqualsWhat(InteractiveScene):
+    def construct(self):
+        self.add(FullScreenRectangle().set_fill(GREY_E, 0.5))
+        cos = Tex(R"\cos(t) = ???", font_size=90, t2c={"t": BLUE})
+        q_marks = cos["???"][0]
+        q_marks.scale(1.2, about_edge=UL)
+        q_marks.space_out_submobjects(1.1)
+        q_marks.shift(MED_SMALL_BUFF * RIGHT)
+        self.add(cos)
+        self.play(Write(q_marks))
+        self.wait()
+
+
+class OhLookAtTheTime(TeacherStudentsScene):
+    def construct(self):
+        morty = self.teacher
+        stds = self.students
+
+        morty.body.insert_n_curves(500)
+        # Test
+        self.play(
+            morty.change("raise_right_hand"),
+            self.change_students("dejected", "tired", "pondering", look_at=3 * UP)
+        )
+        self.wait(3)
+        self.play(
+            morty.change("hesitant", 5 * UR),
+        )
+        self.play(self.change_students("tease", "well", "happy"))
+        self.wait(3)
+        self.play(morty.change("raise_left_hand", 5 * UR))
+        self.wait(3)
+
+
+class TimePassing(InteractiveScene):
+    def construct(self):
+        clock = Clock()
+        self.add(clock)
+        self.play(ClockPassesTime(clock, hours_passed=2, run_time=10))
+
+
+class DerivativeRule(InteractiveScene):
+    def construct(self):
+        # Test
+        t2c = {"t": BLUE, "s": YELLOW}
+        kw = dict(t2c=t2c, font_size=96)
+        in_texs = VGroup(
+            Tex(R"x(t)", **kw),
+            Tex(R"x'(t)", **kw),
+        )
+        out_texs = VGroup(
+            Tex(R"X(s)", **kw),
+            Tex(R"s X(s) - x(0)", **kw),
+        )
+        arrows = Vector(3 * RIGHT, thickness=7).replicate(2)
+
+        in_texs.arrange(DOWN, buff=2)
+        in_texs.to_edge(LEFT, buff=2)
+
+        for in_tex, arrow, output in zip(in_texs, arrows, out_texs):
+            arrow.next_to(in_tex, RIGHT)
+            output.next_to(arrow, RIGHT)
+            fancy_L = Tex(R"\mathcal{L}")
+            fancy_L.next_to(arrow, UP, SMALL_BUFF)
+            arrow.add(fancy_L)
+
+        self.add(in_texs[0], arrows[0], out_texs[0])
+        self.wait()
+        self.play(
+            TransformMatchingTex(in_texs[0].copy(), in_texs[1]),
+            TransformMatchingTex(out_texs[0].copy(), out_texs[1]),
+            TransformFromCopy(*arrows),
+            run_time=1.5
+        )
+        self.wait()
+        SpeechBubble
+
+
+class EndScreen(SideScrollEndScreen):
+    pass

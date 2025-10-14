@@ -108,10 +108,14 @@ class BreakUpCosineTex(InteractiveScene):
 class TranslateToNewLanguage(InteractiveScene):
     graph_resolution = (301, 301)
     show_integral = True
+    label_config = dict(
+        font_size=72,
+        t2c={"{t}": BLUE, "{s}": YELLOW}
+    )
 
     def construct(self):
         # Set up a functions
-        full_s_samples = [complex(a, b) for a in range(-2, 3) for b in range(-2, 3)]
+        full_s_samples = self.get_s_samples()
         func_s_samples = [
             complex(-2, 2),
             complex(-2, -2),
@@ -128,34 +132,12 @@ class TranslateToNewLanguage(InteractiveScene):
             ])
 
         # Graph
-        t2c = {"{t}": BLUE, "{s}": YELLOW}
-        label_kw = dict(t2c=t2c, font_size=72)
-
-        axes = Axes((0, 7), (-4, 4), width=0.5 * FRAME_WIDTH - 1, height=5)
-        axes.to_edge(LEFT).shift(0.5 * DOWN)
-        graph = axes.get_graph(func)
-        graph.set_stroke(BLUE, 5)
-        graph.set_scale_stroke_with_zoom(True)
-        axes.set_scale_stroke_with_zoom(True)
-        graph_label = Tex(R"f({t})", **label_kw)
-        graph_label.move_to(axes).to_edge(UP, buff=LARGE_BUFF)
-
-        VGroup(axes, graph, graph_label).fix_in_frame()
+        axes, graph, graph_label = self.get_graph_group(func)
 
         # Show the S-plane pieces
         frame = self.frame
         frame.set_y(0.5)
-
-        s_plane = ComplexPlane((-3, 3), (-3, 3))
-        s_plane.set_height(7.5)
-        s_plane.move_to(3.75 * RIGHT)
-
-        exp_pieces = VGroup(
-            self.get_exp_graph(s).move_to(s_plane.n2p(s))
-            for s in full_s_samples
-        )
-        s_plane_name = Text("S-plane", font_size=72)
-        s_plane_name.next_to(exp_pieces, UP, MED_SMALL_BUFF)
+        s_plane, exp_pieces, s_plane_name = self.get_s_plane_and_exp_pieces(full_s_samples)
 
         self.play(LaggedStart(
             FadeIn(axes),
@@ -195,23 +177,9 @@ class TranslateToNewLanguage(InteractiveScene):
 
         # Reveal plane
         frame = self.frame
-
-        arrow = Vector(2 * RIGHT, thickness=5, fill_color=WHITE)
-        arrow.fix_in_frame()
-        arrow.next_to(graph_label, RIGHT, buff=MED_LARGE_BUFF)
-
-        fancy_L = Tex(R"\mathcal{L}", font_size=60)
-        fancy_L.next_to(arrow, UP, buff=0)
-        fancy_L.fix_in_frame()
-
-        Fs_label = Tex(R"F({s})", **label_kw)
-        Fs_label.next_to(arrow, RIGHT, MED_LARGE_BUFF)
-        Fs_label.fix_in_frame()
-        Fs_label.set_z_index(1)
-        Fs_label.set_backstroke(BLACK, 5)
+        arrow, fancy_L, Fs_label = self.get_arrow_to_Fs(graph_label)
         Fs_label.save_state()
         Fs_label.become(graph_label)
-        s_plane.set_z_index(-1)
 
         def Func(s):
             result = sum([
@@ -247,7 +215,7 @@ class TranslateToNewLanguage(InteractiveScene):
         # Show interal and continuation
         if self.show_integral:
             # For an insertion
-            integral = Tex(R"= \int^\infty_0 f({t})e^{\minus{s}{t}}d{t}", t2c=t2c)
+            integral = Tex(R"= \int^\infty_0 f({t})e^{\minus{s}{t}}d{t}", t2c=self.label_config["t2c"])
             integral.fix_in_frame()
             integral.next_to(Fs_label, RIGHT)
             integral.set_backstroke(BLACK, 5)
@@ -353,6 +321,55 @@ class TranslateToNewLanguage(InteractiveScene):
             run_time=2
         )
         self.play(frame.animate.reorient(39, 92, 0, (-4.35, 0.64, 3.03), 14.99), run_time=20)
+
+    def get_graph_group(self, func, func_tex=R"f({t})"):
+        # axes = Axes((0, 7), (-4, 4), width=0.5 * FRAME_WIDTH - 1, height=5)
+        axes = Axes((0, 8), (-1, 6, 0.5), width=0.3 * FRAME_WIDTH - 1, height=7)
+        axes.to_edge(LEFT).shift(0.5 * DOWN)
+        graph = axes.get_graph(func)
+        graph.set_stroke(BLUE, 5)
+        graph.set_scale_stroke_with_zoom(True)
+        axes.set_scale_stroke_with_zoom(True)
+        graph_label = Tex(func_tex, **self.label_config)
+        graph_label.move_to(axes).to_edge(UP, buff=LARGE_BUFF)
+
+        graph_group = VGroup(axes, graph, graph_label)
+        graph_group.fix_in_frame()
+        return graph_group
+
+    def get_s_samples(self):
+        return [complex(a, b) for a in range(-2, 3) for b in range(-2, 3)]
+
+    def get_s_plane_and_exp_pieces(self, s_samples):
+        s_plane = ComplexPlane((-3, 3), (-3, 3))
+        s_plane.set_height(7.5)
+        s_plane.move_to(3.75 * RIGHT)
+        s_plane.set_z_index(-1)
+
+        exp_pieces = VGroup(
+            self.get_exp_graph(s).move_to(s_plane.n2p(s))
+            for s in s_samples
+        )
+        s_plane_name = Text("S-plane", font_size=72)
+        s_plane_name.next_to(exp_pieces, UP, MED_SMALL_BUFF)
+        return s_plane, exp_pieces, s_plane_name
+
+    def get_arrow_to_Fs(self, graph_label):
+        arrow = Vector(2 * RIGHT, thickness=5, fill_color=WHITE)
+        arrow.fix_in_frame()
+        arrow.next_to(graph_label, RIGHT, buff=MED_LARGE_BUFF)
+
+        fancy_L = Tex(R"\mathcal{L}", font_size=60)
+        fancy_L.next_to(arrow, UP, buff=0)
+        fancy_L.fix_in_frame()
+
+        Fs_label = Tex(R"F({s})", **self.label_config)
+        Fs_label.next_to(arrow, RIGHT, MED_LARGE_BUFF)
+        Fs_label.fix_in_frame()
+        Fs_label.set_z_index(1)
+        Fs_label.set_backstroke(BLACK, 5)
+
+        return VGroup(arrow, fancy_L, Fs_label)
 
     def get_exp_graph(self, s, **kwargs):
         return get_exp_graph_icon(s, **kwargs)
@@ -2041,5 +2058,172 @@ class LaplaceTransformOfCosineSymbolically(InteractiveScene):
         self.play(
             ShowCreation(answer_rect),
             MoveToTarget(answer)
+        )
+        self.wait()
+
+        # Highlight direct equality
+        lt_def, int_of_expanded, imag_result = new_group[-3:]
+
+        direct_equals = Tex(R"=", font_size=90)
+        direct_equals.rotate(90 * DEG)
+        direct_equals.next_to(lt_def, DOWN, MED_LARGE_BUFF)
+
+        to_fade = VGroup(int_of_expanded, side_eq, imag_result)
+
+        self.play(
+            lower_arrow.animate.set_fill(opacity=0),
+            to_fade.animate.set_fill(opacity=0.2),
+            answer_rect.animate.surround(VGroup(lt_def, answer)),
+            Write(direct_equals),
+        )
+        self.wait()
+        self.play(
+            lower_arrow.animate.set_fill(opacity=1).rotate(PI).set_anim_args(path_arc=PI),
+            answer_rect.animate.surround(VGroup(answer, imag_result)),
+            imag_result.animate.set_fill(opacity=1),
+        )
+        self.wait()
+
+
+class SimplePolesOverImaginaryLine(InteractiveScene):
+    def construct(self):
+        s_plane = ComplexPlane((-5, 5), (-5, 5))
+        s_plane.add_coordinate_labels()
+        omega = 2
+        graph = get_complex_graph(
+            s_plane,
+            lambda s: (s**2) / (s**2 + omega**2 + 1e-6),
+            resolution=(301, 301)
+        )
+        graph[0].sort_faces_back_to_front(DOWN)
+        graph[1].set_clip_plane(OUT, 0)
+        self.add(s_plane, graph)
+
+        # Pan
+        frame = self.frame
+        frame.reorient(-57, 78, 0, (-1.28, 0.48, 0.92), 9.65)
+        self.play(frame.animate.reorient(59, 78, 0, (-0.31, -0.1, 0.87), 10.53), run_time=12)
+
+
+class IntegrationByParts(InteractiveScene):
+    def construct(self):
+        # Test
+        t2c = {"{s}": YELLOW, "{t}": BLUE, R"\omega": PINK}
+        steps = VGroup(
+            Tex(R"X = \int^\infty_0 \cos(\omega{t}) e^{\minus {s}{t}}d{t}", t2c=t2c),
+            Tex(R"X = \left[\frac{1}{\omega} \sin(\omega{t}) e^{\minus {s}{t}} \right]_0^\infty - \int^\infty_0 \frac{1}{\omega} \sin(\omega {t}) \left(\minus {s} e^{\minus{s}{t}} \right) d{t}", t2c=t2c),
+            Tex(R"X = \frac{s}{\omega} \int^\infty_0 \sin(\omega{t}) e^{\minus{s}{t}} d{t}", t2c=t2c),
+            Tex(R"X = \frac{s}{\omega} \left(\left[\frac{\minus 1}{\omega} \cos(\omega{t}) e^{\minus {s}{t}} \right]_0^\infty - \int^\infty_0 \frac{\minus 1}{\omega} \cos(\omega{t}) \left(\minus {s} e^{\minus{s}{t}} \right) d{t} \right)", t2c=t2c),
+            Tex(R"X = \frac{s}{\omega} \left(\frac{1}{\omega} - \frac{s}{\omega} \int^\infty_0 \cos(\omega{t}) e^{\minus{s}{t}} d{t} \right)", t2c=t2c),
+            Tex(R"X = \frac{s}{\omega^2} \left(1 - {s} X \right)", t2c=t2c),
+            Tex(R"X\left(\omega^2 + {s}^2 \right) = {s}", t2c=t2c),
+            Tex(R"X = \frac{s}{\omega^2 + {s}^2}", t2c=t2c),
+        )
+        steps.arrange(DOWN, buff=LARGE_BUFF, aligned_edge=LEFT)
+        steps.to_edge(LEFT, buff=LARGE_BUFF)
+
+        randy = Randolph(mode="raise_left_hand")
+        randy.to_edge(DOWN)
+        steps[0].save_state()
+        steps[0].next_to(randy, UL, MED_LARGE_BUFF)
+        randy.look_at(steps[0])
+
+        ibp = Tex(R"\int u \, dv = uv - \int v \, du", t2c={"u": RED, "v": PINK})
+        ibp.next_to(randy, UR, MED_LARGE_BUFF)
+
+        self.add(randy, steps[0])
+        self.play(Blink(randy))
+        self.play(
+            randy.change("raise_right_hand", ibp),
+            FadeIn(ibp, UP)
+        )
+        self.wait()
+        self.play(
+            self.frame.animate.set_height(steps.get_height() + 3, about_edge=LEFT),
+            Restore(steps[0]),
+            Write(steps[1:], run_time=2),
+            randy.change("pondering", 5 * UL).shift(6 * RIGHT + 2 * DOWN),
+            ibp.animate.shift(6 * RIGHT + 3 * DOWN),
+        )
+        self.play(randy.animate.look_at(steps[-1]))
+        self.wait()
+
+
+class AlternateBreakDown(TranslateToNewLanguage):
+    def construct(self):
+        # Set up
+        axes, graph, graph_label = self.get_graph_group(
+            lambda t: 0.35 * t**2,
+            func_tex=R"f({t}) = {t}^2"
+        )
+        graph_label.set_backstroke(BLACK, 8)
+        s_samples = self.get_s_samples()
+        s_plane, exp_pieces, s_plane_name = self.get_s_plane_and_exp_pieces(s_samples)
+        arrow, fancy_L, Fs_label = self.get_arrow_to_Fs(graph_label)
+
+        self.add(axes, graph, graph_label)
+        self.add(exp_pieces)
+
+        # Note equal to a sum
+        ne = Tex(R"\ne", font_size=96)
+        ne.next_to(graph_label, RIGHT, MED_LARGE_BUFF)
+        ne.set_color(RED)
+        sum_tex = Tex(
+            R"\sum_{n=1}^N c_n e^{s_n t}",
+            t2c={"s_n": YELLOW, "c_n": GREY_A},
+            font_size=72,
+        )
+        sum_tex.next_to(ne, RIGHT)
+        ne_rhs = VGroup(ne, sum_tex)
+
+        self.play(LaggedStart(
+            FadeIn(ne, scale=2),
+            Write(sum_tex),
+            exp_pieces.animate.scale(0.7, about_edge=DR),
+            lag_ratio=0.2
+        ))
+        self.wait()
+
+        # Show transform
+        self.play(
+            LaggedStart(
+                FadeOut(graph_label[4:]),
+                graph_label[:4].animate.next_to(arrow, LEFT),
+                GrowArrow(arrow),
+                Write(fancy_L),
+                TransformFromCopy(graph_label, Fs_label, path_arc=20 * DEG),
+                lag_ratio=0.05
+            ),
+            FadeOut(ne_rhs, DOWN, scale=0.5),
+        )
+        self.wait()
+
+        # Show integral
+        inv_lt = Tex(
+            R"f({t}) = \frac{1}{2\pi i} \int_\gamma F({s}) e^{{s}{t}} d{s}",
+            t2c=self.label_config["t2c"]
+        )
+        inv_lt.next_to(arrow, DOWN, LARGE_BUFF)
+
+        s_plane.replace(exp_pieces)
+        s_plane.add_coordinate_labels(font_size=12)
+        line = Line(s_plane.get_bottom(), s_plane.get_top())
+        line.shift(RIGHT)
+        line.set_stroke(YELLOW, 2)
+        line.insert_n_curves(20)
+
+        self.play(
+            TransformFromCopy(graph_label[:4], inv_lt[:4]),
+            TransformFromCopy(Fs_label, inv_lt["F({s})"][0]),
+            Write(inv_lt[4:]),
+        )
+        self.play(
+            FadeIn(s_plane),
+            LaggedStartMap(FadeOut, exp_pieces, scale=0.1),
+        )
+        self.play(
+            VShowPassingFlash(line.copy()),
+            ShowCreation(line),
+            run_time=5
         )
         self.wait()
