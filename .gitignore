@@ -144,11 +144,48 @@ dmypy.json
 .prof
 
 # End of https://www.toptal.com/developers/gitignore/api/python
+
 # Custom exclusions:
 .DS_Store
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
 
 # Playground
 playground.py
 _2022/wordle/data/pattern_matrix.npy
 _2022/piano/data/
-manim
+
+# Manim media files and outputs
+media/
+videos/
+images/
+*.mp4
+*.mov
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.tex
+!custom/**/*.png
+!custom/**/*.jpg
+
+# Manim cache
+__pycache__/
+*.pyc
+.manim_cache/
+
+# Text editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
