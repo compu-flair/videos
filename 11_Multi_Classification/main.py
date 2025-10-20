@@ -1,190 +1,178 @@
 from manim import *
 import numpy as np
 
+config.disable_caching = True
 
 def get_force_field_func(*point_strength_pairs, **kwargs):
     """
-    Generate a force field function based on point charges.
+    Creates a force field function from point charges.
     
     Args:
-        point_strength_pairs: Tuples of (center_point, strength)
-        radius: Minimum distance to avoid singularities (default 0.5)
+        point_strength_pairs: Tuples of (position, strength)
+        radius: Minimum radius for force calculation
     """
     radius = kwargs.get("radius", 0.5)
 
     def func(point):
         result = np.array([0.0, 0.0, 0.0])
         for center, strength in point_strength_pairs:
-            difference = point - center
-            distance = np.linalg.norm(difference)
-            if distance > radius:
-                result += strength * difference / (distance ** 3)
+            to_center = center - point
+            norm = np.linalg.norm(to_center)
+            if norm == 0:
+                continue
+            elif norm < radius:
+                to_center /= radius**3
+            elif norm >= radius:
+                to_center /= norm**3
+            to_center *= -strength
+            result += to_center
         return result
     return func
 
 
-def get_charged_particle(color, sign, radius=0.1):
-    """Create a charged particle visualization."""
-    result = Circle(
-        stroke_color=WHITE,
-        stroke_width=0.5,
-        fill_color=color,
-        fill_opacity=0.8,
-        radius=radius
-    )
-    sign_symbol = MathTex(sign)
-    sign_symbol.set_stroke(WHITE, 1)
-    sign_symbol.set_width(0.5 * result.get_width())
-    sign_symbol.move_to(result)
-    result.add(sign_symbol)
-    return result
-
-
-class MagneticField(Scene):
+class Scene1(Scene):
     """
-    Visualize a magnetic field created by a bar magnet.
-    Shows vector field and field lines.
+    Magnetic field animation scene based on div_curl.py
     """
     def construct(self):
-        self.add_plane()
-        self.show_magnet()
-        self.show_vector_field()
-        self.show_field_lines()
+        # Show magnetic field only
+        self.show_magnetic_force()
 
-    def add_plane(self):
-        """Add coordinate plane."""
-        plane = NumberPlane()
-        self.add(plane)
-        self.plane = plane
-
-    def show_magnet(self):
-        """Create and display a bar magnet."""
-        # Create magnet halves
-        north_pole = Rectangle(
-            width=3.5,
-            height=1,
-            stroke_width=0,
-            fill_opacity=1,
-            fill_color=RED
-        )
-        south_pole = Rectangle(
-            width=3.5,
-            height=1,
-            stroke_width=0,
-            fill_opacity=1,
-            fill_color=BLUE
-        )
-        
-        # Arrange magnet
-        magnet = VGroup(south_pole, north_pole)
-        magnet.arrange(RIGHT, buff=0)
-        
-        # Add labels
-        for char, vect in [("S", LEFT), ("N", RIGHT)]:
-            label = Text(char)
-            label.scale(2)
-            label.next_to(magnet, vect)
-            label.shift(1.75 * vect)
-            magnet.add(label)
-        
-        self.magnet = magnet
-        self.add(magnet)
-        self.play(Create(magnet))
-        self.wait()
-
-    def show_vector_field(self):
-        """Display the magnetic vector field."""
-        # Define magnetic field function
+    def show_magnetic_force(self):
+        """Show magnetic field around a dipole"""
+        # Create magnetic force field function
+        # Two opposite charges to simulate magnetic dipole
         magnetic_func = get_force_field_func(
-            (3 * LEFT, -1),  # South pole (attractive)
-            (3 * RIGHT, +1)  # North pole (repulsive)
+            (3 * LEFT, -1), (3 * RIGHT, +1)
         )
         
         # Create vector field
-        vector_field = ArrowVectorField(
+        magnetic_field = ArrowVectorField(
             magnetic_func,
-            x_range=[-7, 7, 1],
-            y_range=[-4, 4, 1],
-            length_func=lambda norm: 0.4 * sigmoid(norm)
+            x_range=[-8, 8, 0.5],
+            y_range=[-4, 4, 0.5],
+            length_func=lambda norm: 0.4 * np.tanh(norm)
         )
         
-        self.vector_field = vector_field
-        self.play(Create(vector_field), run_time=3)
-        self.wait()
-
-    def show_field_lines(self):
-        """Show magnetic field lines using stream lines."""
-        # Create stream lines
+        # Animate the magnetic field
+        self.play(
+            Create(magnetic_field),
+            run_time=3
+        )
+        
+        # Store vector field for potential further use
+        self.vector_field = magnetic_field
+        
+        # Create and start stream lines animation directly
         stream_lines = StreamLines(
-            self.vector_field.func,
-            x_range=[-7, 7, 0.5],
-            y_range=[-4, 4, 0.5],
+            magnetic_func,
             stroke_width=2,
             max_anchors_per_line=30,
         )
         
-        # Animate stream lines
-        self.play(stream_lines.create())
+        # Start animating the stream lines immediately
+        self.add(stream_lines)
+        stream_lines.start_animation(warm_up=True, flow_speed=1.5)
+        
+        # Wait a moment to establish the field
         self.wait(2)
-        self.play(FadeOut(stream_lines))
-        self.wait()
+        
+        # Add the spin-1 particle
+        self.add_spin_1_particle(magnetic_func)
+        
+        # Continue showing field interaction
+        self.wait(3)
+        
+        # Stop the stream animation
+        stream_lines.end_animation()
 
-
-class SimpleMagneticField(Scene):
-    """
-    Simplified magnetic field visualization for Manim Community Edition.
-    """
-    def construct(self):
-        # Setup plane
-        plane = NumberPlane()
-        self.add(plane)
+    def add_spin_1_particle(self, magnetic_func):
+        """Add a spin-1 massive particle and show its behavior in the magnetic field"""
         
-        # Create magnet
-        north_pole = Rectangle(
-            width=3.5, height=1,
-            stroke_width=2,
-            stroke_color=WHITE,
-            fill_opacity=0.8,
-            fill_color=RED
-        )
-        south_pole = Rectangle(
-            width=3.5, height=1,
-            stroke_width=2,
-            stroke_color=WHITE,
-            fill_opacity=0.8,
-            fill_color=BLUE
-        )
+        # Create the particle (larger circle to show it's massive)
+        particle = Circle(radius=0.3, color=YELLOW, fill_opacity=0.8, stroke_width=3)
         
-        magnet = VGroup(south_pole, north_pole)
-        magnet.arrange(RIGHT, buff=0)
+        # Add glow effect to make it stand out
+        glow = Circle(radius=0.5, color=YELLOW, fill_opacity=0.2, stroke_opacity=0)
         
-        # Add labels
-        label_s = Text("S", color=WHITE).scale(1.5)
-        label_n = Text("N", color=WHITE).scale(1.5)
-        label_s.next_to(south_pole, LEFT).shift(1.5 * LEFT)
-        label_n.next_to(north_pole, RIGHT).shift(1.5 * RIGHT)
-        
-        labels = VGroup(label_s, label_n)
-        
-        # Magnetic field function
-        def magnetic_func(point):
-            func = get_force_field_func(
-                (3 * LEFT, -1),   # South pole
-                (3 * RIGHT, +1)   # North pole
+        # Spin-1 representation: Three spin vectors (triplet state)
+        spin_arrows = VGroup()
+        for i, angle in enumerate([0, 120, 240]):
+            start_point = 0.1 * np.array([np.cos(np.radians(angle)), np.sin(np.radians(angle)), 0])
+            end_point = 0.4 * np.array([np.cos(np.radians(angle)), np.sin(np.radians(angle)), 0])
+            arrow = Arrow(
+                start=start_point,
+                end=end_point,
+                color=RED,
+                stroke_width=4,
+                tip_length=0.15,
+                max_stroke_width_to_length_ratio=10
             )
-            return func(point)
+            spin_arrows.add(arrow)
         
-        # Create vector field
-        vector_field = ArrowVectorField(
-            magnetic_func,
-            x_range=[-7, 7, 1],
-            y_range=[-4, 4, 1],
-            length_func=lambda norm: 0.35 * np.tanh(norm)
+        # Group particle components
+        particle_group = VGroup(glow, particle, spin_arrows)
+        
+        # Position particle at the center where field is strong
+        center_pos = ORIGIN
+        particle_group.move_to(center_pos)
+        
+        # Animate particle appearance
+        self.play(
+            FadeIn(glow, scale=0.5),
+            GrowFromCenter(particle),
+            LaggedStart(
+                *[Create(arrow) for arrow in spin_arrows],
+                lag_ratio=0.3
+            ),
+            run_time=2
         )
         
-        # Animate
-        self.play(Create(magnet), Write(labels))
-        self.wait()
-        self.play(Create(vector_field), run_time=2)
+        # Show spin precession around the magnetic field direction
+        def precess_spins(mob, dt):
+            # Get the local magnetic field direction at particle position
+            pos = particle.get_center()
+            local_B_field = magnetic_func(pos)
+            if np.linalg.norm(local_B_field) > 0:
+                B_direction = local_B_field / np.linalg.norm(local_B_field)
+                # Larmor precession around B field direction
+                # Precess at a visible rate for demonstration
+                mob.rotate(1.5 * PI * dt, axis=B_direction)
+        
+        # Start precession animation
+        spin_arrows.add_updater(precess_spins)
+        
+        # Wait to observe the precession
+        self.wait(3)
+        
+        # Show energy level splitting (Zeeman effect)
+        energy_levels = VGroup()
+        base_energy = 2 * UP + 5 * RIGHT
+        
+        # Three energy levels for spin-1 (m = -1, 0, +1)
+        for i, (m, color) in enumerate([(-1, BLUE), (0, WHITE), (1, RED)]):
+            level = Line(LEFT, RIGHT, color=color, stroke_width=4)
+            level.move_to(base_energy + i * 0.3 * UP)
+            
+            # Add quantum number label
+            label = MathTex(f"m = {m:+d}" if m != 0 else "m = 0", font_size=24)
+            label.next_to(level, RIGHT, buff=0.2)
+            label.set_color(color)
+            
+            energy_levels.add(VGroup(level, label))
+        
+        # Animate energy level splitting
+        self.play(
+            LaggedStart(
+                *[DrawBorderThenFill(level) for level in energy_levels],
+                lag_ratio=0.2
+            ),
+            run_time=2
+        )
+        
+        # Final wait with all effects
         self.wait(2)
+        
+        # Clean up updaters
+        spin_arrows.clear_updaters()
 
