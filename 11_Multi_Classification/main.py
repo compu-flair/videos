@@ -890,23 +890,60 @@ class Scene2(Scene):
         
         # ===== ANIMATION: Spinning particle that reveals intrinsic spin =====
         
-        # Create a small glowing circle at the center
-        particle = Circle(radius=0.3, color=YELLOW, fill_opacity=0.8, stroke_width=3)
-        particle_glow = Circle(radius=0.5, color=YELLOW, fill_opacity=0.3, stroke_opacity=0)
-        particle_group = VGroup(particle_glow, particle)
+        # Create a sphere-like particle with multiple layers for depth using Sphere
+        particle = Sphere(radius=0.3, resolution=(20, 20))
+        particle.set_color(YELLOW)
+        particle.set_opacity(1.0)
+        
+        particle_mid = Sphere(radius=0.35, resolution=(15, 15))
+        particle_mid.set_color(YELLOW)
+        particle_mid.set_opacity(0.6)
+        
+        particle_glow = Sphere(radius=0.5, resolution=(15, 15))
+        particle_glow.set_color(YELLOW)
+        particle_glow.set_opacity(0.3)
+        
+        particle_group = VGroup(particle_glow, particle_mid, particle)
         particle_group.move_to(ORIGIN)
         
-        # Add surface markers to show rotation (like a tiny planet)
-        marker1 = Dot(color=WHITE, radius=0.05)
-        marker2 = Dot(color=WHITE, radius=0.05)
-        marker3 = Dot(color=BLUE, radius=0.06)
+        # Create rotation axis along Z-axis using arrows
+        axis_arrow_forward = Arrow3D(
+            start=ORIGIN,
+            end=2*OUT,
+            color=RED,
+            thickness=0.02,
+            height=0.2,
+            base_radius=0.05
+        ).shift(OUT*10).set_z_index(-1)
         
-        marker1.move_to(particle.point_at_angle(PI/6))
-        marker2.move_to(particle.point_at_angle(PI))
-        marker3.move_to(particle.point_at_angle(-PI/3))
+        axis_arrow_backward = Arrow3D(
+            start=ORIGIN,
+            end=2*IN,
+            color=RED,
+            thickness=0.02,
+            height=0.2,
+            base_radius=0.05
+        )
         
-        markers = VGroup(marker1, marker2, marker3)
+        axis_group = VGroup(axis_arrow_forward, axis_arrow_backward)
         
+        # Create a curved arrow to show rotation direction around the sphere
+        # Use Arc3D for a proper 3D curved arrow
+        rotation_arrow = CurvedArrow(
+            start_point=[0.7, 0, 0],      # starting point on the +X side
+            end_point=[0, 0.7, 0],        # end point on the +Y side
+            angle=-PI/2,                  # curvature of the arrow
+            color=GREEN,
+            stroke_width=6,
+            tip_length=0.2,
+        )
+
+        # Rotate it into XY plane and bring slightly forward
+        #rotation_arrow.rotate(PI / 2, axis=OUT)
+        rotation_arrow.shift(0.1 * OUT).flip(Y_AXIS)
+        rotation_arrow.rotate(PI / 2, axis=OUT)
+
+        rotation_indicator = rotation_arrow       
         # Create curved motion lines around the particle
         motion_lines = VGroup()
         for angle in [0, PI/2, PI, 3*PI/2]:
@@ -921,36 +958,45 @@ class Scene2(Scene):
             arc.move_to(ORIGIN)
             motion_lines.add(arc)
         
-        # Particle appears with glow
+        # Show the axis first
         self.play(
+            Create(axis_group),
+            run_time=1
+        )
+        
+       
+        
+       
+        self.wait(0.3)
+        
+        # Show rotation direction indicator
+        
+        self.wait(0.3)
+        
+        spin_label = MathTex(r"\text{Spin} = 1", font_size=48, color=ORANGE)
+        spin_label.next_to(particle_group, UP*1.5, buff=0.8)
+        
+        self.play(
+            Write(spin_label),
             FadeIn(particle_group, scale=0.5),
             run_time=1
         )
         
-        self.wait(0.3)
-        
-        # Add "Spin = 1" label
-        spin_label = MathTex(r"\text{Spin} = 1", font_size=48, color=ORANGE)
-        spin_label.next_to(particle_group, DOWN, buff=0.8)
-        
-        self.play(
-            Write(spin_label),
-            run_time=1
-        )
-        
         self.wait(0.5)
-        
-        # Show motion lines and markers, then spin rapidly
         self.play(
+            Create(rotation_indicator),
             FadeIn(motion_lines),
-            FadeIn(markers),
-            run_time=0.5
+            run_time=0.8
         )
         
-        # Rapid spinning - rotate particle with markers
-        spinning_group = VGroup(particle, markers)
+        
+        # Create a group with particle and rotation indicator to rotate together
+        rotating_group = VGroup(particle_group, rotation_indicator)
+        
+        # Rapid spinning - rotate around the Z-axis (OUT direction)
+        # This creates a 3D rotation effect around the depth axis
         self.play(
-            Rotate(spinning_group, angle=4*PI, about_point=ORIGIN),
+            Rotate(rotating_group, angle=4*PI, axis=OUT, about_point=ORIGIN),
             motion_lines.animate.set_stroke(opacity=0.7),
             run_time=2,
             rate_func=linear
@@ -958,80 +1004,19 @@ class Scene2(Scene):
         
         # Slow down the rotation
         self.play(
-            Rotate(spinning_group, angle=PI, about_point=ORIGIN),
+            Rotate(rotating_group, angle=PI, axis=OUT, about_point=ORIGIN),
             motion_lines.animate.set_stroke(opacity=0.3),
             run_time=1.5,
             rate_func=lambda t: 1 - (1-t)**2  # Deceleration
         )
         
-        # Come to a stop and fade out markers and motion lines
+        # Come to a stop and fade out motion lines and rotation indicator
         self.play(
-            FadeOut(markers),
             FadeOut(motion_lines),
+            FadeOut(rotation_indicator),
             run_time=0.8
         )
         
         self.wait(0.5)
         
-        # Create the intrinsic spin arrow (pointing upward)
-        spin_arrow = Arrow(
-            start=ORIGIN,
-            end=0.5*UP,
-            color=GREEN,
-            stroke_width=5,
-            tip_length=0.25,
-            buff=0
-        )
-        spin_arrow.move_to(particle.get_center())
         
-        # Arrow fades in with slight wobble
-        self.play(
-            FadeIn(spin_arrow, scale=0.8),
-            run_time=1
-        )
-        
-        # Wobble the arrow slightly (quiet internal energy)
-        for _ in range(3):
-            self.play(
-                spin_arrow.animate.rotate(angle=0.15, about_point=particle.get_center()),
-                run_time=0.3
-            )
-            self.play(
-                spin_arrow.animate.rotate(angle=-0.15, about_point=particle.get_center()),
-                run_time=0.3
-            )
-        
-        self.wait(0.5)
-        
-        # Particle sits there glowing steadily with pulsing glow
-        self.play(
-            particle_glow.animate.scale(1.3),
-            rate_func=there_and_back,
-            run_time=1.5
-        )
-        
-        # Arrow makes a slow, graceful precession in place
-        # Precession: the arrow rotates around the vertical axis
-        self.play(
-            Rotate(spin_arrow, angle=2*PI, about_point=particle.get_center()),
-            particle_glow.animate.scale(1.2),
-            run_time=4,
-            rate_func=smooth
-        )
-        
-        # Return glow to normal
-        self.play(
-            particle_glow.animate.scale(1/1.2),
-            run_time=0.5
-        )
-        
-        self.wait(2)
-        
-        # Final fade out
-        self.play(
-            *[FadeOut(mob) for mob in [particle_group, spin_arrow, spin_label]],
-            run_time=1.5
-        )
-
-
-
