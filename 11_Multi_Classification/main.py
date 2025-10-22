@@ -77,7 +77,7 @@ class Scene1(Scene):
         stream_lines.start_animation(warm_up=True, flow_speed=1.5)
         
         # Wait a moment to establish the field
-        self.wait(2)
+        self.wait(8)
         
         # Add the spin-1 particle
         self.add_spin_1_particle(magnetic_func)
@@ -348,7 +348,7 @@ class Scene1(Scene):
         self.wait(0.5)
         
         # First: Show Spin 1.5 in center
-        spin15_particle = self.create_particle_with_label(r"\text{Spin } \frac{1}{2}", BLUE, position=ORIGIN + 2*UP)
+        spin15_particle = self.create_particle_with_label(r"\text{Spin } \frac{3}{2}", BLUE, position=ORIGIN + 2*UP)
         arrow_down_15 = Arrow(
             start=spin15_particle.get_bottom(),
             end=ORIGIN + 0.2*UP,
@@ -890,23 +890,60 @@ class Scene2(Scene):
         
         # ===== ANIMATION: Spinning particle that reveals intrinsic spin =====
         
-        # Create a small glowing circle at the center
-        particle = Circle(radius=0.3, color=YELLOW, fill_opacity=0.8, stroke_width=3)
-        particle_glow = Circle(radius=0.5, color=YELLOW, fill_opacity=0.3, stroke_opacity=0)
-        particle_group = VGroup(particle_glow, particle)
+        # Create a sphere-like particle with multiple layers for depth using Sphere
+        particle = Sphere(radius=0.3, resolution=(20, 20))
+        particle.set_color(YELLOW)
+        particle.set_opacity(1.0)
+        
+        particle_mid = Sphere(radius=0.35, resolution=(15, 15))
+        particle_mid.set_color(YELLOW)
+        particle_mid.set_opacity(0.6)
+        
+        particle_glow = Sphere(radius=0.5, resolution=(15, 15))
+        particle_glow.set_color(YELLOW)
+        particle_glow.set_opacity(0.3)
+        
+        particle_group = VGroup(particle_glow, particle_mid, particle)
         particle_group.move_to(ORIGIN)
         
-        # Add surface markers to show rotation (like a tiny planet)
-        marker1 = Dot(color=WHITE, radius=0.05)
-        marker2 = Dot(color=WHITE, radius=0.05)
-        marker3 = Dot(color=BLUE, radius=0.06)
+        # Create rotation axis along Z-axis using arrows
+        axis_arrow_forward = Arrow3D(
+            start=ORIGIN,
+            end=2*OUT,
+            color=RED,
+            thickness=0.02,
+            height=0.2,
+            base_radius=0.05
+        ).shift(OUT*10).set_z_index(-1)
         
-        marker1.move_to(particle.point_at_angle(PI/6))
-        marker2.move_to(particle.point_at_angle(PI))
-        marker3.move_to(particle.point_at_angle(-PI/3))
+        axis_arrow_backward = Arrow3D(
+            start=ORIGIN,
+            end=2*IN,
+            color=RED,
+            thickness=0.02,
+            height=0.2,
+            base_radius=0.05
+        )
         
-        markers = VGroup(marker1, marker2, marker3)
+        axis_group = VGroup(axis_arrow_forward, axis_arrow_backward)
         
+        # Create a curved arrow to show rotation direction around the sphere
+        # Use Arc3D for a proper 3D curved arrow
+        rotation_arrow = CurvedArrow(
+            start_point=[0.7, 0, 0],      # starting point on the +X side
+            end_point=[0, 0.7, 0],        # end point on the +Y side
+            angle=-PI/2,                  # curvature of the arrow
+            color=GREEN,
+            stroke_width=6,
+            tip_length=0.2,
+        )
+
+        # Rotate it into XY plane and bring slightly forward
+        #rotation_arrow.rotate(PI / 2, axis=OUT)
+        rotation_arrow.shift(0.1 * OUT).flip(Y_AXIS)
+        rotation_arrow.rotate(PI / 2, axis=OUT)
+
+        rotation_indicator = rotation_arrow       
         # Create curved motion lines around the particle
         motion_lines = VGroup()
         for angle in [0, PI/2, PI, 3*PI/2]:
@@ -921,36 +958,45 @@ class Scene2(Scene):
             arc.move_to(ORIGIN)
             motion_lines.add(arc)
         
-        # Particle appears with glow
+        # Show the axis first
         self.play(
+            Create(axis_group),
+            run_time=1
+        )
+        
+       
+        
+       
+        self.wait(0.3)
+        
+        # Show rotation direction indicator
+        
+        self.wait(0.3)
+        
+        spin_label = MathTex(r"\text{Spin} = 1", font_size=48, color=ORANGE)
+        spin_label.next_to(particle_group, UP*1.5, buff=0.8)
+        
+        self.play(
+            Write(spin_label),
             FadeIn(particle_group, scale=0.5),
             run_time=1
         )
         
-        self.wait(0.3)
-        
-        # Add "Spin = 1" label
-        spin_label = MathTex(r"\text{Spin} = 1", font_size=48, color=ORANGE)
-        spin_label.next_to(particle_group, DOWN, buff=0.8)
-        
-        self.play(
-            Write(spin_label),
-            run_time=1
-        )
-        
         self.wait(0.5)
-        
-        # Show motion lines and markers, then spin rapidly
         self.play(
+            Create(rotation_indicator),
             FadeIn(motion_lines),
-            FadeIn(markers),
-            run_time=0.5
+            run_time=0.8
         )
         
-        # Rapid spinning - rotate particle with markers
-        spinning_group = VGroup(particle, markers)
+        
+        # Create a group with particle and rotation indicator to rotate together
+        rotating_group = VGroup(particle_group, rotation_indicator)
+        
+        # Rapid spinning - rotate around the Z-axis (OUT direction)
+        # This creates a 3D rotation effect around the depth axis
         self.play(
-            Rotate(spinning_group, angle=4*PI, about_point=ORIGIN),
+            Rotate(rotating_group, angle=4*PI, axis=OUT, about_point=ORIGIN),
             motion_lines.animate.set_stroke(opacity=0.7),
             run_time=2,
             rate_func=linear
@@ -958,231 +1004,28 @@ class Scene2(Scene):
         
         # Slow down the rotation
         self.play(
-            Rotate(spinning_group, angle=PI, about_point=ORIGIN),
+            Rotate(rotating_group, angle=PI, axis=OUT, about_point=ORIGIN),
             motion_lines.animate.set_stroke(opacity=0.3),
             run_time=1.5,
             rate_func=lambda t: 1 - (1-t)**2  # Deceleration
         )
         
-        # Come to a stop and fade out markers and motion lines
+        # Come to a stop and fade out motion lines and rotation indicator
         self.play(
-            FadeOut(markers),
             FadeOut(motion_lines),
+            FadeOut(rotation_indicator),
+            FadeOut(axis_group),
             run_time=0.8
         )
-        
-        self.wait(0.5)
-        
-        # Create the intrinsic spin arrow (pointing upward)
-        spin_arrow = Arrow(
-            start=ORIGIN,
-            end=0.5*UP,
-            color=GREEN,
-            stroke_width=5,
-            tip_length=0.25,
-            buff=0
-        )
-        spin_arrow.move_to(particle.get_center())
-        
-        # Arrow fades in with slight wobble
-        self.play(
-            FadeIn(spin_arrow, scale=0.8),
-            run_time=1
-        )
-        
-        # Wobble the arrow slightly (quiet internal energy)
-        for _ in range(3):
-            self.play(
-                spin_arrow.animate.rotate(angle=0.15, about_point=particle.get_center()),
-                run_time=0.3
-            )
-            self.play(
-                spin_arrow.animate.rotate(angle=-0.15, about_point=particle.get_center()),
-                run_time=0.3
-            )
-        
-        self.wait(0.5)
-        
-        # Particle sits there glowing steadily with pulsing glow
-        self.play(
-            particle_glow.animate.scale(1.3),
-            rate_func=there_and_back,
-            run_time=1.5
-        )
-        
-        # Arrow makes a slow, graceful precession in place
-        # Precession: the arrow rotates around the vertical axis
-        self.play(
-            Rotate(spin_arrow, angle=2*PI, about_point=particle.get_center()),
-            particle_glow.animate.scale(1.2),
-            run_time=4,
-            rate_func=smooth
-        )
-        
-        # Return glow to normal
-        self.play(
-            particle_glow.animate.scale(1/1.2),
-            run_time=0.5
-        )
-        
-        self.wait(2)
-        
-        # Final fade out
-        self.play(
-            *[FadeOut(mob) for mob in [particle_group, spin_arrow, spin_label]],
-            run_time=1.5
-        )
-
-
-
-
-class SpinIsIntrinsic(Scene):
-    """
-    Inspired by `_2018/quaternions.py::QuantumSpin`, this scene clarifies that
-    quantum "spin" is intrinsic (built-in), not literal spinning of a particle.
-    It sequentially presents the three sentences with simple visuals:
-    - Cross out a literal-rotation depiction
-    - Show an internal angular-momentum vector inside the particle
-    - Highlight the statement "spin = 1" as an intrinsic amount
-    """
-    def construct(self):
-        # Title
-        title = Title("Spin is intrinsic")
-        self.play(Write(title))
-        self.wait(0.5)
-
-        # Base particle
-        particle = Circle(radius=0.5, color=BLUE, stroke_width=4)
-        particle.set_fill(BLUE, opacity=0.2)
-        particle.move_to(ORIGIN)
-        core = Dot(ORIGIN, color=BLUE, radius=0.06)
-
-        # --- 1) Not literal rotation ---
-        # Curved arcs suggesting rotation around the particle
-        arc1 = Arc(start_angle=10 * DEGREES, angle=150 * DEGREES, radius=0.8, color=GREY_B)
-        arc2 = Arc(start_angle=200 * DEGREES, angle=150 * DEGREES, radius=0.8, color=GREY_B)
-        arcs = VGroup(arc1, arc2)
-
-        # A red "X" to negate the idea of literal spinning
-        cross = VGroup(
-            Line(0.9 * UL, 0.9 * DR),
-            Line(0.9 * UR, 0.9 * DL),
-        ).set_stroke(RED, width=6)
-
-        line1 = Text(
-            "Even though the word \"spin\" sounds like the particle is physically rotating, it's not.",
-            font_size=32,
-        )
-        line1.to_edge(DOWN)
-
-        self.play(FadeIn(particle), FadeIn(core))
-        self.play(Create(arcs))
-        self.play(Write(line1))
-        self.wait(0.5)
-        self.play(Create(cross))
-        self.wait(1.0)
-
-        # Transition out the negated depiction
-        self.play(FadeOut(VGroup(arcs, cross), scale=0.9))
-
-        # --- 2) Intrinsic angular momentum ---
-        # An internal vector representing intrinsic angular momentum
-        spin_vec = Arrow(ORIGIN, 0.7 * UP, color=YELLOW, buff=0, stroke_width=6)
-        spin_vec.move_to(particle.get_center())
-
-        intrinsic_label = Text("intrinsic angular momentum", font_size=28, color=YELLOW)
-        intrinsic_label.next_to(particle, RIGHT, buff=0.6)
-        brace = BraceBetweenPoints(particle.get_right(), particle.get_left(), direction=UP)
-        brace_label = Text("built into the particle", font_size=26)
-        brace_label.next_to(brace, UP, buff=0.2)
-
-        # Mass/charge icons to compare "intrinsic" attributes
-        tag_group = VGroup(
-            self._tag_circle("m"),
-            self._tag_circle("q"),
-        ).arrange(RIGHT, buff=0.2).next_to(particle, LEFT, buff=0.6)
-
-        line2 = Text(
-            "Instead, spin is an intrinsic form of angular momentum—",
-            font_size=30,
-        )
-        line2b = Text(
-            "something built into the particle itself, just like its mass or charge.",
-            font_size=30,
-        )
-        lines2 = VGroup(line2, line2b).arrange(DOWN, aligned_edge=LEFT)
-        lines2.to_edge(DOWN)
-
-        self.play(
-            GrowArrow(spin_vec),
-            FadeIn(intrinsic_label, shift=RIGHT * 0.2),
-            GrowFromCenter(brace),
-            FadeIn(brace_label, shift=UP * 0.1),
-        )
-        self.play(FadeIn(tag_group, shift=LEFT * 0.2))
-        self.play(ReplacementTransform(line1, lines2))
-        self.wait(1.0)
-
-        # --- 3) Spin equals one (an intrinsic amount) ---
-        s_eq_one = MathTex("s = 1").scale(1.1).set_color(YELLOW)
-        s_eq_one.next_to(particle, UP, buff=0.8)
-
-        line3 = Text(
-            "So when we say spin equal to one, we're talking about how much",
-            font_size=28,
-        )
-        line3b = Text(
-            "intrinsic angular momentum that particle carries.",
-            font_size=28,
-        )
-        lines3 = VGroup(line3, line3b).arrange(DOWN, aligned_edge=LEFT)
-        lines3.to_edge(DOWN)
-
-        self.play(Write(s_eq_one))
-        self.play(ReplacementTransform(lines2, lines3))
-        self.wait(1.5)
-
-        # Small polish: a gentle precession of the internal vector (not the particle itself)
-        def precess(mob, dt):
-            mob.rotate(0.8 * dt, axis=OUT, about_point=particle.get_center())
-
-        spin_vec.add_updater(precess)
-        self.wait(2.0)
-        spin_vec.clear_updaters()
-
-        # Closing beat
-        self.play(*map(FadeOut, [lines3, s_eq_one, intrinsic_label, brace, brace_label, tag_group]))
-        self.play(FadeOut(VGroup(particle, core, spin_vec)))
-        self.wait(0.3)
-
-    def _tag_circle(self, text_str: str) -> VGroup:
-        """Small labeled circle tag (for m, q)."""
-        circ = Circle(radius=0.18, color=GREY_B, stroke_width=2)
-        circ.set_fill(GREY_D, opacity=0.2)
-        label = Text(text_str, font_size=24)
-        tag = VGroup(circ, label)
-        label.move_to(circ.get_center())
-        return tag
-
-
-
-
-
-
-class QuantumSpin(Scene):
-    def construct(self):
-        title = Title("Two-state system")
 
         electron = Dot(color=BLUE)
         electron.set_height(1)
         electron.set_sheen(0.3, UL)
         electron.set_fill(opacity=0.8)
-        kwargs = {
-            "path_arc": PI,
-        }
+        # Create curved arrows for rotation visualization
         curved_arrows = VGroup(
-            Arrow(RIGHT, LEFT, **kwargs),
-            Arrow(LEFT, RIGHT, **kwargs),
+            CurvedArrow(RIGHT*0.8, LEFT*0.8, angle=PI),
+            CurvedArrow(LEFT*0.8, RIGHT*0.8, angle=PI),
         )
         curved_arrows.set_color(GREY_B)
         curved_arrows.set_stroke(width=2)
@@ -1205,7 +1048,7 @@ class QuantumSpin(Scene):
 
         groups = VGroup(x_group, y_group, z_group)
         groups.arrange(RIGHT, buff=1.5)
-        groups.move_to(UP)
+        groups.shift(UP*0.5)
 
         y_ca.rotation = Rotating(
             y_ca, axis=rotate_vector(OUT, 70 * DEGREES, LEFT)
@@ -1216,17 +1059,50 @@ class QuantumSpin(Scene):
         z_ca.rotation = Rotating(z_ca, axis=OUT)
         rotations = [ca.rotation for ca in [x_ca, y_ca, z_ca]]
 
-        matrices = VGroup(
-            Matrix([["0", "1"], ["1", "0"]]),
-            Matrix([["0", "-i"], ["i", "0"]]),
-            Matrix([["1", "0"], ["0", "-1"]]),
+        # Spin-1 operator matrices
+        Sx = MathTex(
+            r"S_x = \frac{\hbar}{\sqrt{2}}"
+            r"\begin{pmatrix}"
+            r"0 & 1 & 0 \\"
+            r"1 & 0 & 1 \\"
+            r"0 & 1 & 0"
+            r"\end{pmatrix}",
+            font_size=36,
+            color=ORANGE
         )
+
+        Sy = MathTex(
+            r"S_y = \frac{\hbar}{\sqrt{2}}"
+            r"\begin{pmatrix}"
+            r"0 & -i & 0 \\"
+            r"i & 0 & -i \\"
+            r"0 & i & 0"
+            r"\end{pmatrix}",
+            font_size=36,
+            color=ORANGE
+        )
+
+        Sz = MathTex(
+            r"S_z = \hbar"
+            r"\begin{pmatrix}"
+            r"1 & 0 & 0 \\"
+            r"0 & 0 & 0 \\"
+            r"0 & 0 & -1"
+            r"\end{pmatrix}",
+            font_size=36,
+            color=ORANGE
+        )
+
+        matrices = [Sx, Sy, Sz]
+
         for matrix, group in zip(matrices, groups):
-            matrix.next_to(group, DOWN)
+            matrix.next_to(group, DOWN*2)
         for matrix in matrices[1:]:
             matrix.align_to(matrices[0], DOWN)
 
-        self.add(title, groups)
+        matrices[0].shift(LEFT*0.7)
+        matrices[2].shift(RIGHT*0.5)
+        self.play(ReplacementTransform(particle_group, groups))
         # Animate matrices appearing with a downward fade-in, while arrows rotate
         self.play(
             LaggedStart(
@@ -1238,3 +1114,428 @@ class QuantumSpin(Scene):
         )
         for x in range(2):
             self.play(*rotations)
+        
+
+        # Stop all rotations before highlighting
+        for rotation in rotations:
+            self.remove(rotation)
+        
+        # Highlight the Spin = 1 label
+        spin_highlight = SurroundingRectangle(
+            spin_label,
+            color=YELLOW,
+            stroke_width=4,
+            buff=0.15,
+            corner_radius=0.1
+        )
+        
+        self.play(
+            Create(spin_highlight),
+            spin_label.animate.set_color(YELLOW),
+            run_time=1
+        )
+        self.wait(1)
+        
+        # Fade out the spin label highlight
+        self.play(
+            FadeOut(spin_highlight),
+            spin_label.animate.set_color(ORANGE),
+            run_time=0.5
+        )
+        self.wait(0.5)
+        
+        # Now highlight each spin state (arrow group and matrix) one by one
+        # X spin state
+        x_highlight_group = SurroundingRectangle(
+            x_group,
+            color=GREEN,
+            stroke_width=4,
+            buff=0.2,
+            corner_radius=0.1
+        )
+        x_highlight_matrix = SurroundingRectangle(
+            Sx,
+            color=GREEN,
+            stroke_width=4,
+            buff=0.15,
+            corner_radius=0.1
+        )
+        
+        self.play(
+            Create(x_highlight_group),
+            Create(x_highlight_matrix),
+            x_group.animate.set_color(GREEN),
+            Sx.animate.set_color(GREEN),
+            run_time=1
+        )
+        self.wait(1.5)
+        
+        self.play(
+            FadeOut(x_highlight_group),
+            FadeOut(x_highlight_matrix),
+            x_group.animate.set_color(WHITE),
+            Sx.animate.set_color(ORANGE),
+            run_time=0.5
+        )
+        self.wait(0.3)
+        
+        # Y spin state
+        y_highlight_group = SurroundingRectangle(
+            y_group,
+            color=RED,
+            stroke_width=4,
+            buff=0.2,
+            corner_radius=0.1
+        )
+        y_highlight_matrix = SurroundingRectangle(
+            Sy,
+            color=RED,
+            stroke_width=4,
+            buff=0.15,
+            corner_radius=0.1
+        )
+        
+        self.play(
+            Create(y_highlight_group),
+            Create(y_highlight_matrix),
+            y_group.animate.set_color(RED),
+            Sy.animate.set_color(RED),
+            run_time=1
+        )
+        self.wait(1.5)
+        
+        self.play(
+            FadeOut(y_highlight_group),
+            FadeOut(y_highlight_matrix),
+            y_group.animate.set_color(WHITE),
+            Sy.animate.set_color(ORANGE),
+            run_time=0.5
+        )
+        self.wait(0.3)
+        
+        # Z spin state
+        z_highlight_group = SurroundingRectangle(
+            z_group,
+            color=BLUE,
+            stroke_width=4,
+            buff=0.2,
+            corner_radius=0.1
+        )
+        z_highlight_matrix = SurroundingRectangle(
+            Sz,
+            color=BLUE,
+            stroke_width=4,
+            buff=0.15,
+            corner_radius=0.1
+        )
+        
+        self.play(
+            Create(z_highlight_group),
+            Create(z_highlight_matrix),
+            z_group.animate.set_color(BLUE),
+            Sz.animate.set_color(BLUE),
+            run_time=1
+        )
+        self.wait(1.5)
+        
+        self.play(
+            FadeOut(z_highlight_group),
+            FadeOut(z_highlight_matrix),
+            z_group.animate.set_color(WHITE),
+            Sz.animate.set_color(ORANGE),
+            run_time=0.5
+        )
+        
+        self.wait(0.5)
+
+
+class Scene3(ThreeDScene):
+    """
+    Scene 3: Spin as a Vector Quantity with Projections
+    """
+    def construct(self):
+        # Set up 3D camera
+        self.set_camera_orientation(phi=60 * DEGREES, theta=-45 * DEGREES)
+        
+        # Create 3D coordinate system
+        axes = ThreeDAxes(
+            x_range=[-3, 3, 1],
+            y_range=[-3, 3, 1],
+            z_range=[-3, 3, 1],
+            x_length=6,
+            y_length=6,
+            z_length=6,
+            axis_config={"color": GRAY, "stroke_width": 2}
+        )
+        
+        # Add axis labels
+        x_label = MathTex("x", font_size=36, color=RED).next_to(axes.x_axis.get_end(), RIGHT)
+        y_label = MathTex("y", font_size=36, color=GREEN).next_to(axes.y_axis.get_end(), UP)
+        z_label = MathTex("z", font_size=36, color=BLUE).next_to(axes.z_axis.get_end(), OUT)
+        
+        # Fix labels to face camera
+        x_label.rotate(PI/2, axis=RIGHT)
+        y_label.rotate(PI/2, axis=RIGHT)
+        
+        # Animate coordinate system appearing
+        self.play(
+            Create(axes),
+            run_time=1
+        )
+        
+        self.play(
+            Write(x_label),
+            Write(y_label),
+            Write(z_label),
+            run_time=1
+        )
+        
+        self.wait(1)
+        
+        # Create spin vector (pointing at an angle in 3D space)
+        spin_direction = np.array([1.5, 1.0, 2.0])
+        spin_vector = Arrow3D(
+            start=ORIGIN,
+            end=spin_direction,
+            color=YELLOW,
+            thickness=0.03,
+            height=0.3,
+            base_radius=0.08
+        )
+        
+        # Add vector label
+        spin_label = MathTex(r"\vec{S}", font_size=48, color=YELLOW)
+        spin_label.move_to(spin_direction + 0.5*RIGHT + 0.3*UP)
+        spin_label.rotate(PI/2, axis=RIGHT)
+        
+        # Animate spin vector appearing
+        self.play(
+            Create(spin_vector),
+            Write(spin_label),
+            run_time=1
+        )
+        
+        self.wait(1)
+        
+        
+        
+        # Now show the projections
+        # S_x projection (onto x-axis)
+        sx_point = np.array([spin_direction[0], 0, 0])
+        sx_projection = Arrow3D(
+            start=ORIGIN,
+            end=sx_point,
+            color=RED,
+            thickness=0.02,
+            height=0.2,
+            base_radius=0.06
+        )
+        
+        # Dashed line from spin tip to projection
+        sx_dashed = DashedLine(
+            start=spin_direction,
+            end=sx_point,
+            color=RED,
+            dash_length=0.1,
+            stroke_width=2
+        )
+        
+        sx_label = MathTex("S_x", font_size=36, color=RED)
+        sx_label.move_to(sx_point + 0.5*DOWN)
+        sx_label.rotate(PI/2, axis=RIGHT)
+        
+        # Animate S_x projection
+        self.play(
+            Create(sx_dashed),
+            run_time=1
+        )
+        self.play(
+            Create(sx_projection),
+            Write(sx_label),
+            run_time=1
+        )
+        
+        self.wait(1)
+        
+        # S_y projection (onto y-axis)
+        sy_point = np.array([0, spin_direction[1], 0])
+        sy_projection = Arrow3D(
+            start=ORIGIN,
+            end=sy_point,
+            color=GREEN,
+            thickness=0.02,
+            height=0.2,
+            base_radius=0.06
+        )
+        
+        sy_dashed = DashedLine(
+            start=spin_direction,
+            end=sy_point,
+            color=GREEN,
+            dash_length=0.1,
+            stroke_width=2
+        )
+        
+        sy_label = MathTex("S_y", font_size=36, color=GREEN)
+        sy_label.move_to(sy_point + 0.5*LEFT)
+        sy_label.rotate(PI/2, axis=RIGHT)
+        
+        # Animate S_y projection
+        self.play(
+            Create(sy_dashed),
+            run_time=1
+        )
+        self.play(
+            Create(sy_projection),
+            Write(sy_label),
+            run_time=1
+        )
+        
+        self.wait(1)
+        
+        # S_z projection (onto z-axis)
+        sz_point = np.array([0, 0, spin_direction[2]])
+        sz_projection = Arrow3D(
+            start=ORIGIN,
+            end=sz_point,
+            color=BLUE,
+            thickness=0.02,
+            height=0.2,
+            base_radius=0.06
+        )
+        
+        sz_dashed = DashedLine(
+            start=spin_direction,
+            end=sz_point,
+            color=BLUE,
+            dash_length=0.1,
+            stroke_width=2
+        )
+        
+        sz_label = MathTex("S_z", font_size=36, color=BLUE)
+        sz_label.move_to(sz_point + 0.5*RIGHT)
+        sz_label.rotate(PI/2, axis=RIGHT)
+        
+        # Animate S_z projection
+        self.play(
+            Create(sz_dashed),
+            run_time=1
+        )
+        self.play(
+            Create(sz_projection),
+            Write(sz_label),
+            run_time=1
+        )
+        
+        self.wait()
+
+
+class Scene4(Scene):
+    """
+    Scene 4: Zeeman Hamiltonian Equation
+    """
+    def construct(self):
+        equation = MathTex(
+            r"H_Z = -\gamma\,\mathbf{S} \cdot \mathbf{B}",
+            font_size=72,
+            color=ORANGE
+        )
+        
+        self.play(Write(equation), run_time=2)
+        self.wait(3)
+
+
+class Scene5(Scene):
+    """
+    Scene 5: Magnetic Field Equation
+    """
+    def construct(self):
+        equation = MathTex(
+            r"\mathbf{\text{B}} = B\,\hat{z}",
+            font_size=72,
+            color=PURE_RED
+        )
+        
+        self.play(Write(equation), run_time=1)
+        self.wait(3)
+
+
+
+
+
+class Scene6(Scene):
+    """
+    Scene 6: Zeeman Hamiltonian Simplification
+    """
+    def construct(self):
+        # Start with the full equation
+        equation1 = MathTex(
+            r"H_Z = -\gamma\,\mathbf{S} \cdot \mathbf{B}",
+            font_size=72,
+            color=ORANGE
+        )
+        
+        self.play(Write(equation1), run_time=2)
+        self.wait(2)
+        
+        # Transform to the simplified equation
+        equation2 = MathTex(
+            r"H_Z = -\gamma B S_z",
+            font_size=72,
+            color=ORANGE
+        )
+        
+        self.play(ReplacementTransform(equation1, equation2), run_time=2)
+        self.wait(3)
+
+
+
+class Scene7(Scene):
+    """
+    Scene 7: Highlight gamma B as constant and transform to matrix
+    """
+    def construct(self):
+        equation = MathTex(
+            r"H_Z = -", r"\gamma", r" B", r" S_z",
+            font_size=72,
+            color=ORANGE
+        )
+        self.add(equation)
+        brace = Brace(equation[1:3], DOWN, color=YELLOW)
+        brace_text = brace.get_text("1")
+        brace_text.set_color(YELLOW)
+        
+        self.play(
+            GrowFromCenter(brace),
+            Write(brace_text),
+            run_time=1
+        )
+        self.wait(2)
+        
+        # Fade out brace and text
+        self.play(
+            FadeOut(brace),
+            FadeOut(brace_text),
+            run_time=0.8
+        )
+        
+        self.wait(0.5)
+        
+        # Transform to matrix form
+        matrix_equation = MathTex(
+            r"H = \begin{pmatrix} -1 & 0 & 0 \\ 0 & 0 & 0 \\ 0 & 0 & 1 \end{pmatrix}",
+            font_size=72,
+            color=ORANGE
+        )
+        
+        self.play(
+            ReplacementTransform(equation, matrix_equation),
+            run_time=1
+        )
+        diagonal_elements = Group(matrix_equation[0][4:6],matrix_equation[0][9:10],matrix_equation[0][13:14])
+        circles = [Create(SurroundingRectangle(obj)) for obj in diagonal_elements]
+        self.play(
+            *circles,
+            run_time=1
+        )
+        self.wait(3)
