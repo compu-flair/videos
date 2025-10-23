@@ -2384,3 +2384,340 @@ class Scene15(Scene):
         self.add(equation)
         self.wait(3)
 
+
+class Scene16(Scene):
+    """
+    Scene 16: Comparison table between Physics and ML terms (no headers)
+    """
+    def construct(self):
+        # Create table data using MathTex for proper LaTeX rendering
+        table_data = [
+            [
+                Text("Physics term", font_size=24, weight=BOLD, color=BLUE),
+                Text("ML term", font_size=24, weight=BOLD, color=GREEN),
+                Text("Physics values", font_size=24, weight=BOLD, color=BLUE),
+                Text("ML values", font_size=24, weight=BOLD, color=GREEN)
+            ],
+            [
+                Text("Energy states", font_size=22, color=BLUE),
+                Text("Classes", font_size=22, color=GREEN),
+                MathTex(r"-1, 0, +1", font_size=36, color=BLUE),
+                Text("dog, cat, bird", font_size=20, color=GREEN)
+            ],
+            [
+                Text("Eigen-energy", font_size=22, color=BLUE),
+                Text("Weighted data", font_size=22, color=GREEN),
+                MathTex(r"E_n", font_size=36, color=BLUE),
+                MathTex(r"w_n^T x", font_size=36, color=GREEN)
+            ],
+            [
+                Text("Probability", font_size=22, color=BLUE),
+                Text("Softmax", font_size=22, color=GREEN),
+                MathTex(r"P=\frac{e^{-\beta E_n}}{\sum_n e^{-\beta E_n}}", font_size=28, color=BLUE),
+                MathTex(r"P=\frac{e^{w_n^T x}}{\sum_k e^{w_k^T x}}", font_size=28, color=GREEN)
+            ],
+        ]
+        
+        # Create table using MobjectTable
+        table = MobjectTable(
+            table_data,
+            include_outer_lines=True,
+            line_config={"stroke_width": 2, "color": YELLOW},
+        )
+        
+        # Style the table
+        table.scale(0.9)
+        
+        # Animate table appearing
+        self.play(Create(table), run_time=2)
+        
+        self.wait(3)
+
+
+class Scene17(Scene):
+    """
+    Scene 17: Simple transformation equation -β E_n → w_n^T x
+    """
+    def construct(self):
+        # Title showing the correspondence
+        equation = MathTex(
+            r"-\beta E_n \longrightarrow w_n^T x",
+            font_size=72,
+            color=YELLOW
+        )
+        
+        self.play(Write(equation), run_time=2)
+        
+        self.wait(3)
+
+
+class Scene18(Scene):
+    """
+    Scene 18: Softmax probability equation
+    """
+    def construct(self):
+        equation = MathTex(
+            r"P(n) = \frac{e^{w_n^T x}}{Z}",
+            font_size=72,
+            color=GREEN
+        )
+        
+        self.play(Write(equation), run_time=2)
+        
+        self.wait(3)
+
+
+class Scene19(Scene):
+    """
+    Scene 19: Partition function Z equation
+    """
+    def construct(self):
+        equation = MathTex(
+            r"Z = \sum_n e^{w_n^T x}",
+            font_size=72,
+            color=ORANGE
+        )
+        
+        self.play(Write(equation), run_time=2)
+        
+        self.wait(3)
+
+
+class Scene20(Scene):
+    """
+    Scene 20: Boltzmann version of the softmax equation
+    """
+    def construct(self):
+        equation = MathTex(
+            r"P(n) = \frac{e^{-\beta E_n}}{Z}",
+            font_size=72,
+            color=YELLOW
+        )
+        
+        self.play(Write(equation), run_time=1)
+        
+        self.wait(3)
+
+
+class Scene21(Scene):
+    """
+    Scene 21: Training animation - images enter classifier, weights adjust on right
+    """
+    def construct(self):
+        # Create classifier box in the center-left
+        classifier_box = Rectangle(
+            width=2.5, height=2.5,
+            fill_color=GREEN_D, fill_opacity=0.8,
+            stroke_color=GREEN, stroke_width=4
+        )
+        classifier_box.shift(2*LEFT)
+        
+        classifier_label = Text("Classifier", font_size=28, color=WHITE, weight=BOLD)
+        classifier_label.move_to(classifier_box.get_center())
+        
+        # Show classifier box
+        self.play(
+            DrawBorderThenFill(classifier_box),
+            Write(classifier_label),
+            run_time=1
+        )
+        
+        self.wait(0.5)
+        
+        # Create the parameter curve on the right side
+        axes = Axes(
+            x_range=[0, 10, 2],
+            y_range=[0, 10, 2],
+            x_length=4,
+            y_length=3,
+            axis_config={"color": GRAY, "include_tip": False},
+        )
+        axes.shift(4*RIGHT + 0.5*DOWN)
+        
+        # Add labels
+        x_label = Text("Iteration", font_size=18, color=WHITE)
+        x_label.next_to(axes.x_axis, DOWN, buff=0.2)
+        
+        y_label = Text("Loss", font_size=18, color=WHITE)
+        y_label.next_to(axes.y_axis, LEFT, buff=0.2)
+        
+        title = Text("Weight Optimization", font_size=22, color=YELLOW, weight=BOLD)
+        title.next_to(axes, UP, buff=0.3)
+        
+        # Show axes and labels
+        self.play(
+            Create(axes),
+            Write(x_label),
+            Write(y_label),
+            Write(title),
+            run_time=1
+        )
+        
+        # Create the optimization curve (exponential decay toward optimal)
+        curve = axes.plot(
+            lambda x: 8 * np.exp(-0.5 * x) + 1,
+            color=BLUE,
+            x_range=[0, 10]
+        )
+        
+        # Target optimal value line
+        optimal_line = axes.plot(
+            lambda x: 1,
+            color=RED,
+            x_range=[0, 10],
+            stroke_width=2
+        )
+        optimal_label = Text("Optimal", font_size=16, color=RED)
+        optimal_label.next_to(axes.c2p(10, 1), RIGHT, buff=0.2)
+        
+        # Show optimal line
+        self.play(
+            Create(optimal_line),
+            Write(optimal_label),
+            run_time=0.8
+        )
+        
+        # Create a moving dot that will trace the curve
+        dot = Dot(color=YELLOW, radius=0.08)
+        dot.move_to(axes.c2p(0, 8))
+        
+        # Function to load and create pixelated animal images
+        def create_animal_image(animal_name, color):
+            """Create a simplified pixelated representation of an animal"""
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            img_path = os.path.join(script_dir, "assets", f"{animal_name}.png")
+            
+            # Try to load image, if not found create a colored square
+            try:
+                img = Image.open(img_path)
+                if img.mode == 'RGBA':
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    background.paste(img, mask=img.split()[-1])
+                    img = background
+                elif img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # Resize to small pixelated grid
+                pixel_size = 10
+                img_resized = img.resize((pixel_size, pixel_size), Image.Resampling.NEAREST)
+                img_array = np.array(img_resized)
+                
+                # Create pixel grid
+                pixel_grid = VGroup()
+                px_size = 0.08
+                
+                for i in range(pixel_size):
+                    for j in range(pixel_size):
+                        r, g, b = img_array[i, j]
+                        color_rgb = np.clip(np.array([r, g, b]) / 255.0, 0, 1)
+                        
+                        try:
+                            manim_color = rgb_to_color(color_rgb)
+                        except:
+                            manim_color = WHITE if np.mean(color_rgb) > 0.5 else BLACK
+                        
+                        pixel = Square(
+                            side_length=px_size,
+                            fill_opacity=1,
+                            stroke_width=0.5,
+                            stroke_color=GRAY,
+                            stroke_opacity=0.3
+                        )
+                        pixel.set_fill(color=manim_color)
+                        
+                        x_pos = (j - pixel_size / 2) * px_size
+                        y_pos = (pixel_size / 2 - i) * px_size
+                        pixel.move_to([x_pos, y_pos, 0])
+                        
+                        pixel_grid.add(pixel)
+                
+                return pixel_grid
+            except:
+                # Fallback: create a simple colored square
+                square = Square(side_length=0.8, fill_color=color, fill_opacity=0.8, stroke_color=color)
+                label = Text(animal_name[:1].upper(), font_size=20, color=WHITE)
+                label.move_to(square.get_center())
+                return VGroup(square, label)
+        
+        # Animation: Show curve being traced while images come in
+        # Start tracing the curve
+        self.add(dot)
+        
+        # Animate the curve being drawn and dot moving along it
+        # We'll do this in segments with images appearing during the animation
+        
+        animals = ["cat", "dog", "bird"]
+        animal_colors = [WHITE, BLUE, RED]
+        
+        # Number of training iterations
+        num_iterations = 6
+        
+        for i in range(num_iterations):
+            # Choose a random animal
+            animal_idx = i % 3
+            animal = animals[animal_idx]
+            color = animal_colors[animal_idx]
+            
+            # Create animal image entering from left
+            animal_img = create_animal_image(animal, color)
+            animal_img.scale(0.6)
+            animal_img.move_to(8*LEFT + np.random.uniform(-1, 1)*UP)
+            
+            # Add border around image
+            border = SurroundingRectangle(animal_img, color=color, stroke_width=2, buff=0.05)
+            img_group = VGroup(animal_img, border)
+            
+            # Animate image entering and being processed
+            self.play(
+                img_group.animate.move_to(classifier_box.get_center()),
+                run_time=0.6
+            )
+            
+            # Flash effect when processing
+            flash = Circle(radius=1.5, color=YELLOW, stroke_width=4, fill_opacity=0)
+            flash.move_to(classifier_box.get_center())
+            self.play(
+                flash.animate.scale(0.3).set_stroke(opacity=0),
+                run_time=0.3
+            )
+            self.remove(flash)
+            
+            # Move image out to the right (discarded)
+            self.play(
+                img_group.animate.shift(3*DOWN).set_opacity(0),
+                run_time=0.4
+            )
+            self.remove(img_group)
+            
+            # Update the curve - trace a segment
+            segment_start = i * 10 / num_iterations
+            segment_end = (i + 1) * 10 / num_iterations
+            
+            curve_segment = axes.plot(
+                lambda x: 8 * np.exp(-0.5 * x) + 1,
+                color=BLUE,
+                x_range=[segment_start, segment_end],
+                stroke_width=4
+            )
+            
+            # Move dot along the curve segment
+            self.play(
+                Create(curve_segment),
+                dot.animate.move_to(axes.c2p(segment_end, 8 * np.exp(-0.5 * segment_end) + 1)),
+                run_time=0.5
+            )
+        
+        # Highlight that we've reached the optimal value
+        self.play(
+            dot.animate.set_color(GREEN).scale(1.5),
+            run_time=0.5
+        )
+        
+        self.play(
+            dot.animate.scale(1/1.5),
+            run_time=0.3
+        )
+        
+        self.wait(2)
+
+
