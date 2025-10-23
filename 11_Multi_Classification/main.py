@@ -1539,3 +1539,848 @@ class Scene7(Scene):
             run_time=1
         )
         self.wait(3)
+
+
+class Scene8(Scene):
+    """
+    Scene 8: Quantum Measurement - Rotating sphere with states
+    Animate: "When we measure energy, we can only obtain diagonal values: -1, 0, or +1"
+    Minimum text, maximum visuals - Quantum Roulette Style
+    """
+    def construct(self):
+        # Create the quantum roulette wheel
+        # Central circle (the wheel)
+        wheel_radius = 2.5
+        wheel = Circle(
+            radius=wheel_radius,
+            color=BLUE,
+            stroke_width=8,
+            fill_color=BLUE_E,
+            fill_opacity=0.3
+        )
+        wheel.shift(0.5*LEFT)
+        
+        # Inner circle for aesthetics
+        inner_circle = Circle(
+            radius=wheel_radius * 0.7,
+            color=BLUE_B,
+            stroke_width=4,
+            stroke_opacity=0.5
+        )
+        inner_circle.move_to(wheel.get_center())
+        
+        # Outer glow
+        outer_glow = Circle(
+            radius=wheel_radius * 1.1,
+            color=BLUE,
+            stroke_width=2,
+            stroke_opacity=0.3,
+            fill_opacity=0.1
+        )
+        outer_glow.move_to(wheel.get_center())
+        
+        wheel_group = VGroup(outer_glow, wheel, inner_circle)
+        
+        # Create 3 states positioned equally around the circle (120 degrees apart)
+        states = VGroup()
+        state_values = ["-1", "0", "+1"]
+        state_colors = [RED, YELLOW, BLUE]
+        angles = [90*DEGREES, 210*DEGREES, 330*DEGREES]  # Spread equally
+        
+        state_positions = []
+        
+        for i, (value, color, angle) in enumerate(zip(state_values, state_colors, angles)):
+            # Position on the circle
+            pos = wheel.get_center() + wheel_radius * np.array([np.cos(angle), np.sin(angle), 0])
+            state_positions.append(pos)
+            
+            # Create state marker (circle with value)
+            marker_circle = Circle(
+                radius=0.5,
+                color=color,
+                fill_opacity=0.8,
+                stroke_width=6,
+                stroke_color=color
+            )
+            marker_circle.move_to(pos)
+            
+            # Glow effect
+            marker_glow = Circle(
+                radius=0.7,
+                color=color,
+                fill_opacity=0.3,
+                stroke_width=0
+            )
+            marker_glow.move_to(pos)
+            
+            # Value label
+            value_label = MathTex(value, font_size=48, color=WHITE)
+            value_label.move_to(pos)
+            
+            state_marker = VGroup(marker_glow, marker_circle, value_label)
+            states.add(state_marker)
+        
+        # Create the spinner arrow (starts at center, points outward)
+        arrow_length = wheel_radius * 0.6
+        spinner = Arrow(
+            start=wheel.get_center(),
+            end=wheel.get_center() + arrow_length * UP,
+            color=YELLOW,
+            stroke_width=8,
+            tip_length=0.3,
+            buff=0
+        )
+        
+        # Add a central hub for the spinner
+        hub = Circle(
+            radius=0.2,
+            color=YELLOW,
+            fill_opacity=1,
+            stroke_width=4,
+            stroke_color=GOLD
+        )
+        hub.move_to(wheel.get_center())
+        
+        spinner_group = VGroup(spinner, hub)
+        
+        # Animate everything appearing
+        self.play(
+            FadeIn(outer_glow),
+            DrawBorderThenFill(wheel),
+            Create(inner_circle),
+            run_time=1.5
+        )
+        
+        self.play(
+            LaggedStart(
+                *[FadeIn(state, scale=0.5) for state in states],
+                lag_ratio=0.3
+            ),
+            run_time=1.5
+        )
+        
+        self.play(
+            GrowArrow(spinner),
+            FadeIn(hub, scale=0.5),
+            run_time=1
+        )
+        
+        self.wait(0.5)
+        
+        # Spinning animation - fast spin then slow down
+        # First: Fast spinning (multiple rotations)
+        self.play(
+            Rotate(spinner_group, angle=8*PI, about_point=wheel.get_center()),
+            run_time=2,
+            rate_func=linear
+        )
+        
+        
+        self.wait(0.5)
+        
+        # Highlight the selected state (state 1 - the "0")
+        selected_state = states[0]  # The "-1" state
+        
+        # Flash effect
+        flash_circle = Circle(
+            radius=0.8,
+            color=RED,
+            stroke_width=8,
+            fill_opacity=0
+        )
+        flash_circle.move_to(selected_state.get_center())
+        
+        for _ in range(3):
+            self.play(
+                flash_circle.animate.scale(1.3).set_stroke(opacity=0),
+                run_time=0.4
+            )
+            flash_circle.scale(1/1.3).set_stroke(opacity=1)
+        
+        self.remove(flash_circle)
+        
+        # Pulse the selected state
+        self.play(
+            selected_state.animate.scale(1.3),
+            run_time=0.5
+        )
+        self.play(
+            selected_state.animate.scale(1/1.3),
+            run_time=0.5
+        )
+        
+        self.wait(1)
+        
+        # Show result card appearing
+        result_card = RoundedRectangle(
+            width=2,
+            height=1.5,
+            corner_radius=0.2,
+            fill_color=RED,
+            fill_opacity=0.3,
+            stroke_color=RED,
+            stroke_width=6
+        )
+        result_card.next_to(wheel_group, RIGHT*4)
+        
+        result_value = MathTex("-1", font_size=72, color=YELLOW)
+        result_value.move_to(result_card.get_center())
+        
+        result_label = Text("Measured", font_size=20, color=WHITE)
+        result_label.next_to(result_card, UP, buff=0.3)
+        
+        # Animate result appearing
+        self.play(
+            FadeIn(result_card, scale=0.8),
+            Write(result_value),
+            run_time=1
+        )
+        
+        self.play(
+            Write(result_label),
+            run_time=0.5
+        )
+        
+        self.wait(1.5)
+
+
+class Scene9(Scene):
+    """
+    Scene 9: Formula 2S + 1 with spin value boxes
+    Shows the relationship between spin quantum number and number of states
+    """
+    def construct(self):
+        # Create header formula
+        header = MathTex(
+            r"2S + 1",
+            font_size=80,
+            color=YELLOW
+        )
+        header.to_edge(UP, buff=0.5)
+        
+        # Animate header appearing
+        self.play(
+            Write(header),
+            run_time=1.5
+        )
+        
+        self.wait(1)
+        
+        # Create boxes for different spin values
+        spin_values = [r"\frac{1}{2}", "1", r"\frac{3}{2}", "2"]
+        colors = [BLUE, RED, GREEN, ORANGE]
+        
+        boxes = VGroup()
+        
+        for i, (spin, color) in enumerate(zip(spin_values, colors)):
+            # Create box (smaller size)
+            box = RoundedRectangle(
+                width=1.8,
+                height=1.2,
+                corner_radius=0.15,
+                fill_color=color,
+                fill_opacity=0.2,
+                stroke_color=color,
+                stroke_width=3
+            )
+            
+            # Spin label
+            spin_label = MathTex(
+                f"S = {spin}",
+                font_size=32,
+                color=color
+            )
+            spin_label.move_to(box.get_center())
+            
+            # Box group
+            box_group = VGroup(box, spin_label)
+            boxes.add(box_group)
+        
+        # Arrange boxes vertically (stacked) with smaller spacing
+        boxes.arrange(DOWN, buff=0.3)
+        boxes.shift(0.4*DOWN + 4*LEFT)  # Shift down and to the left
+        
+        # Animate boxes appearing
+        self.play(
+            LaggedStart(
+                *[FadeIn(box, scale=0.8) for box in boxes],
+                lag_ratio=0.3
+            ),
+            run_time=2.5
+        )
+        
+        self.wait(1)
+        
+        # Function to create spinor particles for a given number of states
+        def create_spinors(num_states, color, box):
+            """Create spinning particles for a box with given number of states"""
+            spinor_group = VGroup()
+            
+            for i in range(num_states):
+                # Particle (electron-like dot)
+                particle = Dot(color=color, radius=0.15)
+                particle.set_sheen(0.3, UL)
+                particle.set_fill(opacity=0.8)
+                
+                # Determine rotation direction based on state
+                # For 3 states (S=1): first is CCW, middle is CCW (like S=2), third is CW
+                # For 5 states (S=2): last spinner should be CW
+                # Otherwise alternate between counter-clockwise and clockwise
+                if num_states == 3:
+                    if i == 0:
+                        is_counter_clockwise = True
+                    elif i == 1:
+                        is_counter_clockwise = True  # CCW like middle of S=2
+                    else:  # i == 2
+                        is_counter_clockwise = False  # Clockwise
+                elif num_states == 5 and i == 4:
+                    is_counter_clockwise = False  # Last spinner of S=2 is CW
+                else:
+                    is_counter_clockwise = (i % 2 == 0)
+                
+                # Curved arrows for rotation visualization
+                if is_counter_clockwise:
+                    arc1 = Arc(radius=0.35, start_angle=0, angle=PI*0.7, color=GREY_B, stroke_width=2)
+                    arc1.add_tip(tip_length=0.1)
+                    arc2 = Arc(radius=0.35, start_angle=PI, angle=PI*0.7, color=GREY_B, stroke_width=2)
+                    arc2.add_tip(tip_length=0.1)
+                else:
+                    arc1 = Arc(radius=0.35, start_angle=0, angle=-PI*0.7, color=GREY_B, stroke_width=2)
+                    arc1.add_tip(tip_length=0.1)
+                    arc2 = Arc(radius=0.35, start_angle=PI, angle=-PI*0.7, color=GREY_B, stroke_width=2)
+                    arc2.add_tip(tip_length=0.1)
+                
+                curved_arrows = VGroup(arc1, arc2)
+                
+                # Rotation axis arrow (direction based on state index)
+                # Distribute states evenly: for n states, go from up to down
+                if num_states == 2:
+                    arrow_direction = UP if i == 0 else DOWN
+                elif num_states == 3:
+                    arrow_direction = UP if i == 0 else (LEFT if i == 1 else DOWN)
+                else:
+                    # For more states, distribute evenly
+                    angle_fraction = i / (num_states - 1)
+                    arrow_direction = rotate_vector(UP, angle_fraction * PI, OUT)
+                
+                if np.array_equal(arrow_direction, RIGHT):
+                    # Dot on top for zero spin state (pointing out of screen)
+                    top_dot = Dot(color=color, radius=0.08)
+                    top_dot.move_to(particle.get_center() + 0.3*OUT)
+                    axis_arrow = top_dot
+                else:
+                    axis_arrow = Arrow(
+                        ORIGIN, 0.55*arrow_direction,
+                        color=color,
+                        buff=0,
+                        tip_length=0.15,
+                        max_stroke_width_to_length_ratio=15,
+                        max_tip_length_to_length_ratio=0.5
+                    )
+                
+                # Group particle with rotation elements
+                particle_group = VGroup(particle, curved_arrows, axis_arrow)
+                spinor_group.add(particle_group)
+            
+            # Arrange spinors horizontally
+            spinor_group.arrange(RIGHT, buff=0.8)
+            spinor_group.next_to(box, RIGHT, buff=1.5)
+            
+            return spinor_group
+        
+        # Create all spinors for all boxes
+        all_spinors = VGroup()
+        num_states_list = [2, 3, 4, 5]  # S=1/2, S=1, S=3/2, S=2
+        
+        for i, (box, num_states) in enumerate(zip(boxes, num_states_list)):
+            spinors = create_spinors(num_states, colors[i], box)
+            all_spinors.add(spinors)
+        
+        # Animate all particles appearing at the same time
+        self.play(
+            LaggedStart(
+                *[FadeIn(p, scale=0.5) for spinor_group in all_spinors for p in spinor_group],
+                lag_ratio=0.05
+            ),
+            run_time=2
+        )
+        
+        # Start continuous rotation animations for all curved arrows
+        rotations = []
+        for spinor_idx, spinor_group in enumerate(all_spinors):
+            num_spinors = len(spinor_group)
+            for i, particle_group in enumerate(spinor_group):
+                particle = particle_group[0]  # The dot
+                curved_arrows = particle_group[1]  # The arc arrows
+                # Determine rotation direction
+                # For 3 spinors (S=1): first CCW, middle CCW (like S=2), last CW
+                # For 5 spinors (S=2): last spinner should be clockwise
+                if num_spinors == 3:
+                    if i == 0:
+                        angle = 2*PI  # counter-clockwise
+                    elif i == 1:
+                        angle = 2*PI  # counter-clockwise (like middle of S=2)
+                    else:  # i == 2
+                        angle = -2*PI  # clockwise
+                elif num_spinors == 5 and i == 4:
+                    angle = -2*PI  # Last spinner of S=2 is clockwise
+                else:
+                    # For other cases, alternate
+                    angle = 2*PI if i % 2 == 0 else -2*PI
+                
+                if angle != 0:  # Only create rotation if there's actual rotation
+                    rotation = Rotating(curved_arrows, radians=angle, about_point=particle.get_center(), rate_func=linear)
+                    rotations.append(rotation)
+        
+        # Play rotations continuously
+        self.play(*rotations)
+        self.play(*rotations)
+        
+        self.wait(15)
+        
+
+
+class Scene10(Scene):
+    """
+    Scene 10: Formula 2S + 1 with spin value boxes (static then scaled)
+    Shows the relationship between spin quantum number and number of states
+    """
+    def construct(self):
+        # Create header formula
+        header = MathTex(
+            r"2S + 1",
+            font_size=80,
+            color=YELLOW
+        )
+        header.to_edge(UP, buff=0.5)
+        
+        # Add header directly
+        self.add(header)
+        
+        # Create boxes for different spin values
+        spin_values = [r"\frac{1}{2}", "1", r"\frac{3}{2}", "2"]
+        colors = [BLUE, RED, GREEN, ORANGE]
+        
+        boxes = VGroup()
+        
+        for i, (spin, color) in enumerate(zip(spin_values, colors)):
+            # Create box (smaller size)
+            box = RoundedRectangle(
+                width=1.8,
+                height=1.2,
+                corner_radius=0.15,
+                fill_color=color,
+                fill_opacity=0.2,
+                stroke_color=color,
+                stroke_width=3
+            )
+            
+            # Spin label
+            spin_label = MathTex(
+                f"S = {spin}",
+                font_size=32,
+                color=color
+            )
+            spin_label.move_to(box.get_center())
+            
+            # Box group
+            box_group = VGroup(box, spin_label)
+            boxes.add(box_group)
+        
+        # Arrange boxes vertically (stacked) with smaller spacing
+        boxes.arrange(DOWN, buff=0.3)
+        boxes.shift(0.4*DOWN + 4*LEFT)  # Shift down and to the left
+        
+        # Add boxes directly
+        self.add(boxes)
+        
+        # Function to create spinor particles for a given number of states
+        def create_spinors(num_states, color, box):
+            """Create spinning particles for a box with given number of states"""
+            spinor_group = VGroup()
+            
+            for i in range(num_states):
+                # Particle (electron-like dot)
+                particle = Dot(color=color, radius=0.15)
+                particle.set_sheen(0.3, UL)
+                particle.set_fill(opacity=0.8)
+                
+                # Determine rotation direction based on state
+                # For 3 states (S=1): first is CCW, middle is CCW (like S=2), third is CW
+                # For 5 states (S=2): last spinner should be CW
+                # Otherwise alternate between counter-clockwise and clockwise
+                if num_states == 3:
+                    if i == 0:
+                        is_counter_clockwise = True
+                    elif i == 1:
+                        is_counter_clockwise = True  # CCW like middle of S=2
+                    else:  # i == 2
+                        is_counter_clockwise = False  # Clockwise
+                elif num_states == 5 and i == 4:
+                    is_counter_clockwise = False  # Last spinner of S=2 is CW
+                else:
+                    is_counter_clockwise = (i % 2 == 0)
+                
+                # Curved arrows for rotation visualization
+                if is_counter_clockwise:
+                    arc1 = Arc(radius=0.35, start_angle=0, angle=PI*0.7, color=GREY_B, stroke_width=2)
+                    arc1.add_tip(tip_length=0.1)
+                    arc2 = Arc(radius=0.35, start_angle=PI, angle=PI*0.7, color=GREY_B, stroke_width=2)
+                    arc2.add_tip(tip_length=0.1)
+                else:
+                    arc1 = Arc(radius=0.35, start_angle=0, angle=-PI*0.7, color=GREY_B, stroke_width=2)
+                    arc1.add_tip(tip_length=0.1)
+                    arc2 = Arc(radius=0.35, start_angle=PI, angle=-PI*0.7, color=GREY_B, stroke_width=2)
+                    arc2.add_tip(tip_length=0.1)
+                
+                curved_arrows = VGroup(arc1, arc2)
+                
+                # Rotation axis arrow (direction based on state index)
+                # Distribute states evenly: for n states, go from up to down
+                if num_states == 2:
+                    arrow_direction = UP if i == 0 else DOWN
+                elif num_states == 3:
+                    arrow_direction = UP if i == 0 else (LEFT if i == 1 else DOWN)
+                else:
+                    # For more states, distribute evenly
+                    angle_fraction = i / (num_states - 1)
+                    arrow_direction = rotate_vector(UP, angle_fraction * PI, OUT)
+                
+                if np.array_equal(arrow_direction, RIGHT):
+                    # Dot on top for zero spin state (pointing out of screen)
+                    top_dot = Dot(color=color, radius=0.08)
+                    top_dot.move_to(particle.get_center() + 0.3*OUT)
+                    axis_arrow = top_dot
+                else:
+                    axis_arrow = Arrow(
+                        ORIGIN, 0.55*arrow_direction,
+                        color=color,
+                        buff=0,
+                        tip_length=0.15,
+                        max_stroke_width_to_length_ratio=15,
+                        max_tip_length_to_length_ratio=0.5
+                    )
+                
+                # Group particle with rotation elements
+                particle_group = VGroup(particle, curved_arrows, axis_arrow)
+                spinor_group.add(particle_group)
+            
+            # Arrange spinors horizontally
+            spinor_group.arrange(RIGHT, buff=0.8)
+            spinor_group.next_to(box, RIGHT, buff=1.5)
+            
+            return spinor_group
+        
+        # Create all spinors for all boxes
+        all_spinors = VGroup()
+        num_states_list = [2, 3, 4, 5]  # S=1/2, S=1, S=3/2, S=2
+        
+        for i, (box, num_states) in enumerate(zip(boxes, num_states_list)):
+            spinors = create_spinors(num_states, colors[i], box)
+            all_spinors.add(spinors)
+        
+        # Add all spinors directly without animation
+        self.add(all_spinors)
+        
+        # Wait for 1 second
+        self.wait(1)
+        
+        # Group boxes and spinors for scaling/shifting (excluding header)
+        content = VGroup(boxes, all_spinors)
+        
+        # Animate scaling down and shifting left
+        self.play(
+            content.animate.scale(0.8).shift(1.5*LEFT),
+            run_time=1
+        )
+        
+        self.wait(2)
+
+
+class Scene11(Scene):
+    """
+    Scene 11: Boltzmann Distribution Formula Transformation
+    Shows P(E_n) formula below origin, then transforms a copy to partition function Z
+    """
+    def construct(self):
+        # Create the first formula P(E_n) below origin
+        prob_formula = MathTex(
+            r"P(E_n) = \frac{e^{-\beta E_n}}{Z}",
+            font_size=60,
+            color=ORANGE
+        )
+        prob_formula.shift(1*DOWN)
+        
+        # Animate the probability formula appearing
+        self.play(
+            Write(prob_formula),
+            run_time=1
+        )
+        
+        self.wait()
+        
+        
+        # Transform the copy into the partition function Z
+        partition_formula = MathTex(
+            r"Z = \sum_n e^{-\beta E_n}",
+            font_size=60,
+            color=YELLOW
+        ).next_to(prob_formula, DOWN*2)
+        
+        self.play(
+            ReplacementTransform(prob_formula.copy()[0][-1], partition_formula),
+            run_time=1
+        )
+        
+        
+        self.wait(2)
+
+
+class Scene12(Scene):
+    """
+    Scene 12: ML Classifier Animation (without card)
+    Reproduces the multiclass classification sequence from Scene1
+    """
+    def construct(self):
+        # 1. Create pixelated bird image at the top
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        bird_img_path = os.path.join(script_dir, "assets", "bird.png")
+        bird_img = Image.open(bird_img_path)
+        
+        # Convert to RGB if it has transparency (RGBA)
+        if bird_img.mode == 'RGBA':
+            # Create white background
+            background = Image.new('RGB', bird_img.size, (255, 255, 255))
+            background.paste(bird_img, mask=bird_img.split()[-1])  # Use alpha channel as mask
+            bird_img = background
+        elif bird_img.mode != 'RGB':
+            bird_img = bird_img.convert('RGB')
+        
+        # Resize to pixelated grid
+        bird_pixel_size = 25  # 20x20 grid for more detail
+        bird_img_resized = bird_img.resize((bird_pixel_size, bird_pixel_size), Image.Resampling.NEAREST)
+        bird_img_array = np.array(bird_img_resized)
+        
+        # Create pixelated bird image
+        bird_pixel_grid = VGroup()
+        pixel_size = 0.1  # Larger pixel size
+        bird_position = 2.2 * UP  # Position at top center
+        
+        for i in range(bird_pixel_size):
+            for j in range(bird_pixel_size):
+                # Get RGB color from the image
+                r, g, b = bird_img_array[i, j]
+                
+                # Convert to 0-1 range and ensure valid color
+                color_rgb = np.array([r, g, b]) / 255.0
+                color_rgb = np.clip(color_rgb, 0, 1)  # Ensure values are between 0 and 1
+                
+                # Create pixel with proper color handling
+                try:
+                    manim_color = rgb_to_color(color_rgb)
+                except:
+                    # Fallback color if conversion fails
+                    manim_color = WHITE if np.mean(color_rgb) > 0.5 else BLACK
+                
+                pixel = Square(
+                    side_length=pixel_size,
+                    fill_opacity=1,
+                    stroke_width=0.02,
+                    stroke_color=GRAY,
+                    stroke_opacity=0.5
+                )
+                pixel.set_fill(color=manim_color)
+                
+                x_pos = bird_position[0] + (j - bird_pixel_size / 2) * pixel_size
+                y_pos = bird_position[1] + (bird_pixel_size / 2 - i) * pixel_size
+                pixel.move_to([x_pos, y_pos, 0])
+                
+                bird_pixel_grid.add(pixel)
+        
+        # Add border around pixelated image
+        image_border = SurroundingRectangle(
+            bird_pixel_grid,
+            color=WHITE,
+            stroke_width=3,
+            buff=0.1
+        )
+        
+        # Input label
+        input_label = Text("Image", font_size=24, color=WHITE)
+        input_label.next_to(bird_pixel_grid, DOWN, buff=0.2)
+        
+        # 2. Classifier box in the middle
+        classifier_box = Rectangle(
+            width=3, height=1.5,
+            fill_color=GREEN_D, fill_opacity=0.8,
+            stroke_color=GREEN, stroke_width=3
+        )
+        classifier_box.next_to(input_label, DOWN*2)
+        classifier_label = Text("3-Class\nClassifier", font_size=20, color=WHITE)
+        classifier_label.move_to(classifier_box.get_center())
+        
+        # First arrow (input → classifier)
+        arrow1 = Arrow(
+            start=input_label.get_bottom(),
+            end=classifier_box.get_top(),
+            color=YELLOW,
+            stroke_width=5,
+            tip_length=0.3,
+            buff=0.5
+        )
+        
+        # 3. Three output classes with probability bars stacked horizontally at the bottom
+        classes = ["Dog", "Cat", "Bird"]
+        class_colors = [BLUE, WHITE, RED]  # Match energy level colors
+        
+        class_bars = VGroup()
+        class_labels = VGroup()
+        
+        for i, (class_name, color) in enumerate(zip(classes, class_colors)):
+            # Class label on left
+            label = Text(class_name, font_size=24, color=WHITE, weight=BOLD)
+            
+            # Probability bar to the right of label (horizontal bar)
+            bar_bg = Rectangle(width=3, height=0.6, color=GRAY_D, fill_opacity=0.8)
+            bar_fill = Rectangle(width=0.05, height=0.6, color=color, fill_opacity=0.9)
+            bar_fill.align_to(bar_bg, LEFT)
+            
+            bar = VGroup(bar_bg, bar_fill)
+            bar.next_to(label, RIGHT, buff=0.3)
+            
+            # Group label and bar together
+            class_group = VGroup(label, bar)
+            
+            class_bars.add(bar)
+            class_labels.add(label)
+        
+        # Arrange all class groups horizontally (side by side)
+        all_classes = VGroup()
+        for i in range(3):
+            all_classes.add(VGroup(class_labels[i], class_bars[i]))
+        
+        all_classes.arrange(RIGHT, buff=0.8)
+        all_classes.next_to(classifier_box, DOWN, buff=1.3)
+        
+        # Second arrow (classifier → outputs)
+        arrow2 = Arrow(
+            start=classifier_box.get_bottom(),
+            end=all_classes.get_top(),
+            color=YELLOW,
+            stroke_width=5,
+            tip_length=0.3,
+            buff=0.2
+        )
+        
+        # === ANIMATIONS ===
+        
+        # Step 1: Show image
+        self.play(
+            LaggedStart(
+                *[DrawBorderThenFill(pixel) for pixel in bird_pixel_grid],
+                lag_ratio=0.01  # Faster lag for more pixels
+            ),
+            DrawBorderThenFill(image_border),
+            Write(input_label),
+            run_time=3  # Slightly longer to accommodate more pixels
+        )
+        
+        # Step 2: Arrow to classifier
+        self.play(
+            GrowArrow(arrow1),
+            run_time=0.8
+        )
+        
+        # Step 3: Show classifier box
+        self.play(
+            DrawBorderThenFill(classifier_box),
+            Write(classifier_label),
+            run_time=1
+        )
+        
+        # Step 4: Arrow to outputs
+        self.play(
+            GrowArrow(arrow2),
+            run_time=0.8
+        )
+        
+        # Step 5: Show output classes with bars
+        self.play(
+            LaggedStart(
+                *[DrawBorderThenFill(bar) for bar in class_bars],
+                *[Write(label) for label in class_labels],
+                lag_ratio=0.2
+            ),
+            run_time=2
+        )
+        
+        # Step 6: Animate probability bars growing (showing classification)
+        # Simulate: 5% Dog, 5% Cat, 90% Bird
+        probabilities = [0.05, 0.05, 0.90]
+        
+        # Create probability text labels
+        prob_texts = VGroup()
+        for i, prob in enumerate(probabilities):
+            prob_text = Text(f"{int(prob*100)}%", font_size=28, color=YELLOW, weight=BOLD)
+            prob_text.next_to(class_bars[i][0], UP, aligned_edge=RIGHT)
+            prob_texts.add(prob_text)
+        
+        for i, prob in enumerate(probabilities):
+            bar_fill = class_bars[i][1]  # Get the fill part
+            bar_fill.generate_target()
+            bar_fill.target.stretch_to_fit_width(3 * prob)
+            bar_fill.target.align_to(class_bars[i][0], LEFT)
+        
+        self.play(
+            *[MoveToTarget(class_bars[i][1]) for i in range(3)],
+            *[FadeIn(prob_texts[i], scale=0.5) for i in range(3)],
+            run_time=2
+        )
+        
+        self.wait(2)
+
+
+class Scene13(Scene):
+    """
+    Scene 13: Boltzmann equation for spin-1 state m = +1 (E_+1 = -1)
+    """
+    def construct(self):
+        equation = MathTex(
+            r"P(E_{+1}) = \frac{e^{\beta}}{Z}",
+            font_size=60,
+            color=BLUE
+        )
+        
+        self.add(equation)
+        self.wait(3)
+
+
+class Scene14(Scene):
+    """
+    Scene 14: Boltzmann equation for spin-1 state m = 0 (E_0 = 0)
+    """
+    def construct(self):
+        equation = MathTex(
+            r"P(E_0) = \frac{1}{Z}",
+            font_size=60,
+            color=YELLOW
+        )
+        
+        self.add(equation)
+        self.wait(3)
+
+
+class Scene15(Scene):
+    """
+    Scene 15: Boltzmann equation for spin-1 state m = -1 (E_-1 = +1)
+    """
+    def construct(self):
+        equation = MathTex(
+            r"P(E_{-1}) = \frac{e^{-\beta}}{Z}",
+            font_size=60,
+            color=RED
+        )
+        
+        self.add(equation)
+        self.wait(3)
+
