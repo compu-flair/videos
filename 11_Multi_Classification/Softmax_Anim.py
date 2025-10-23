@@ -43,6 +43,13 @@ USE_BIAS_FOR_3D = False    # if True, plot z = w^T x + b; else z = w^T x
 SAVE_3D = False            # save figure to PNG under EXPORT_DIR
 SHOW_3D = True             # show interactive window (may block)
 
+# Partition function Z(x) = sum_n exp(w_n^T x + b_n) plot controls
+PLOT_Z2D = True            # 2D heatmap of Z (or log Z)
+PLOT_Z3D = False           # 3D surface plot of Z (or log Z)
+Z_AS_LOG = True            # if True, plot log Z(x) for stability
+SAVE_Z = False             # save Z plot(s) under EXPORT_DIR
+SHOW_Z = True              # show interactive window (may block)
+
 
 # ----------------------------
 # Data generation
@@ -467,6 +474,178 @@ if PLOT3D:
 		save_png=SAVE_3D,
 		show=SHOW_3D,
 	)
+
+
+def _compute_grid_and_scores_from_exports():
+	"""Utility: load dataset/weights, build a grid, and compute class scores.
+
+	Returns a dict with:
+	  - XX, YY: meshgrid arrays (shape [Ny, Nx])
+	  - scores: array of shape (Ny, Nx, K) with scores s_k(x) = w_k^T x + b_k
+	  - X_loaded, y_loaded: dataset arrays
+	  - class_labels: labels in the same order as scores' last dimension
+	  - extent: (x_min, x_max, y_min, y_max) for imshow
+	"""
+	script_dir = Path(__file__).resolve().parent
+	weights_csv = script_dir / EXPORT_DIR / "weights.csv"
+	dataset_csv = script_dir / EXPORT_DIR / "dataset.csv"
+	if not weights_csv.exists() or not dataset_csv.exists():
+		print("Exports not found; run training/export first.")
+		return None
+
+	weights = np.genfromtxt(weights_csv, delimiter=",", names=True)
+	if weights.shape == ():
+		weights = np.array([weights], dtype=weights.dtype)
+	class_labels = weights["class_label"].astype(int)
+	# Build W (D x K) and b (K,) in the order they appear in weights.csv
+	W = np.vstack([[float(weights["w1"][i]), float(weights["w2"][i])] for i in range(len(weights))]).T
+	b = np.array([float(weights["b"][i]) for i in range(len(weights))], dtype=float)
+
+	ds = np.genfromtxt(dataset_csv, delimiter=",", names=True)
+	X_loaded = np.vstack([ds["x1"], ds["x2"]]).T.astype(np.float64)
+	y_loaded = ds["y"].astype(int)
+
+	# Grid over data extent with padding
+	x_min, x_max = float(X_loaded[:, 0].min()), float(X_loaded[:, 0].max())
+	y_min, y_max = float(X_loaded[:, 1].min()), float(X_loaded[:, 1].max())
+	pad_x = 0.5 * (x_max - x_min + 1e-9)
+	pad_y = 0.5 * (y_max - y_min + 1e-9)
+	x_lin = np.linspace(x_min - pad_x, x_max + pad_x, 200)
+	y_lin = np.linspace(y_min - pad_y, y_max + pad_y, 200)
+	XX, YY = np.meshgrid(x_lin, y_lin)
+	grid = np.c_[XX.ravel(), YY.ravel()]  # (Ny*Nx, 2)
+
+	# Scores for all classes: S = XW + b
+	S = grid @ W + b  # (Ny*Nx, K)
+	scores = S.reshape(XX.shape + (W.shape[1],))
+
+	extent = (x_lin.min(), x_lin.max(), y_lin.min(), y_lin.max())
+	return {
+		"XX": XX,
+		"YY": YY,
+		"scores": scores,
+		"X_loaded": X_loaded,
+		"y_loaded": y_loaded,
+		"class_labels": class_labels,
+		"extent": extent,
+	}
+
+
+def _plot_Z_heatmap_from_exports(as_log: bool = Z_AS_LOG, save_png: bool = SAVE_Z, show: bool = SHOW_Z):
+	"""2D heatmap of Z(x) = sum_n exp(w_n^T x + b_n).
+
+	If as_log is True, plot log Z(x) for numerical stability.
+	"""
+	try:
+		import matplotlib.pyplot as plt
+	except Exception:
+		print("matplotlib not available, skipping Z heatmap.")
+		return
+
+	bundle = _compute_grid_and_scores_from_exports()
+	if bundle is None:
+		return
+
+	XX, YY = bundle["XX"], bundle["YY"]
+	scores = bundle["scores"]  # (Ny, Nx, K)
+	X_loaded, y_loaded = bundle["X_loaded"], bundle["y_loaded"]
+	extent = bundle["extent"]
+
+	# Compute Z via log-sum-exp for stability
+	s_max = np.max(scores, axis=-1, keepdims=True)
+	with np.errstate(over='ignore', under='ignore', invalid='ignore'):
+		sum_exp = np.sum(np.exp(scores - s_max), axis=-1)  # (Ny, Nx)
+		logZ = (s_max[..., 0] + np.log(sum_exp + 1e-12))   # (Ny, Nx)
+	Z = np.exp(logZ)
+
+	fig, ax = plt.subplots(figsize=(8, 6))
+	data_to_plot = logZ if as_log else Z
+	hm = ax.imshow(
+		data_to_plot,
+		origin='lower',
+		extent=extent,
+		aspect='auto',
+		cmap='magma',
+	)
+	cbar = plt.colorbar(hm, ax=ax)
+	cbar.set_label('log Z(x)' if as_log else 'Z(x)')
+
+	# Overlay dataset points
+	colors = {-1: 'tab:red', 0: 'tab:blue', 1: 'tab:green'}
+	for lab in np.unique(y_loaded):
+		mask = (y_loaded == lab)
+		ax.scatter(X_loaded[mask, 0], X_loaded[mask, 1], s=8, c=colors.get(int(lab), 'gray'), alpha=0.7, label=f"y={int(lab)}")
+	ax.legend(loc='upper left')
+	ax.set_xlabel('x1')
+	ax.set_ylabel('x2')
+	ax.set_title('Heatmap of ' + (r'$\log Z(x)$' if as_log else r'$Z(x)$'))
+	plt.tight_layout()
+
+	if save_png:
+		out_dir = Path(__file__).resolve().parent / EXPORT_DIR
+		out_dir.mkdir(parents=True, exist_ok=True)
+		fname = out_dir / f"Z_heatmap{'_log' if as_log else ''}.png"
+		plt.savefig(fname, dpi=200)
+		print(f"Saved Z heatmap to: {fname}")
+
+	if show:
+		plt.show()
+	else:
+		plt.close(fig)
+
+
+def _plot_Z_surface_from_exports(as_log: bool = Z_AS_LOG, save_png: bool = SAVE_Z, show: bool = SHOW_Z):
+	"""3D surface plot of Z(x) = sum_n exp(w_n^T x + b_n) (or log Z)."""
+	try:
+		import matplotlib.pyplot as plt
+		from mpl_toolkits.mplot3d import Axes3D  # noqa: F401
+	except Exception:
+		print("matplotlib not available, skipping Z 3D surface.")
+		return
+
+	bundle = _compute_grid_and_scores_from_exports()
+	if bundle is None:
+		return
+
+	XX, YY = bundle["XX"], bundle["YY"]
+	scores = bundle["scores"]  # (Ny, Nx, K)
+
+	# Compute Z via log-sum-exp
+	s_max = np.max(scores, axis=-1, keepdims=True)
+	with np.errstate(over='ignore', under='ignore', invalid='ignore'):
+		sum_exp = np.sum(np.exp(scores - s_max), axis=-1)  # (Ny, Nx)
+		logZ = (s_max[..., 0] + np.log(sum_exp + 1e-12))   # (Ny, Nx)
+	Z = np.exp(logZ)
+
+	data_to_plot = logZ if as_log else Z
+
+	fig = plt.figure(figsize=(10, 8))
+	ax = fig.add_subplot(111, projection='3d')
+	ax.plot_surface(XX, YY, data_to_plot, cmap='viridis', alpha=0.9, linewidth=0)
+	ax.set_xlabel('x1')
+	ax.set_ylabel('x2')
+	ax.set_zlabel('log Z(x)' if as_log else 'Z(x)')
+	ax.set_title('Surface of ' + (r'$\log Z(x)$' if as_log else r'$Z(x)$'))
+	plt.tight_layout()
+
+	if save_png:
+		out_dir = Path(__file__).resolve().parent / EXPORT_DIR
+		out_dir.mkdir(parents=True, exist_ok=True)
+		fname = out_dir / f"Z_surface{'_log' if as_log else ''}.png"
+		plt.savefig(fname, dpi=200)
+		print(f"Saved Z 3D surface to: {fname}")
+
+	if show:
+		plt.show()
+	else:
+		plt.close(fig)
+
+
+if PLOT_Z2D:
+	_plot_Z_heatmap_from_exports(as_log=Z_AS_LOG, save_png=SAVE_Z, show=SHOW_Z)
+
+if PLOT_Z3D:
+	_plot_Z_surface_from_exports(as_log=Z_AS_LOG, save_png=SAVE_Z, show=SHOW_Z)
 
 
 
