@@ -50,6 +50,15 @@ Z_AS_LOG = True            # if True, plot log Z(x) for stability
 SAVE_Z = False             # save Z plot(s) under EXPORT_DIR
 SHOW_Z = True              # show interactive window (may block)
 
+# Probability P(n|x) plots where P(n|x) = exp(w_n^T x (+ b_n?)) / Z(x)
+# By default, numerator uses NO bias to match the user's formula, and denominator Z uses bias (as above)
+PLOT_P2D = True            # heatmaps of class probabilities
+P_CLASSES_TO_PLOT = [-1, 0, 1]  # which class labels to render
+PROB_NUM_USE_BIAS = False  # numerator uses b_n if True; else only w_n^T x
+PROB_DEN_USE_BIAS = True   # denominator Z uses b_n if True; else only w_k^T x
+SAVE_P = False             # save probability heatmaps
+SHOW_P = True              # show probability heatmaps
+
 
 # ----------------------------
 # Data generation
@@ -432,7 +441,7 @@ def _plot_3d_from_exports(
 	# ax.set_title(f"3D: class {class_label} — w=({w[0]:.3f},{w[1]:.3f})")
 
 	# Surface plane
-	ax.plot_surface(XX, YY, ZZ, cmap='viridis', alpha=0.25, linewidth=0, antialiased=False)
+	ax.plot_surface(XX, YY, ZZ, cmap='magma', alpha=0.25, linewidth=0, antialiased=False)
 
 	# Scatter points colored by label
 	colors = { -1: 'tab:red', 0: 'tab:blue', 1: 'tab:green' }
@@ -513,20 +522,28 @@ def _compute_grid_and_scores_from_exports():
 	x_lin = np.linspace(x_min - pad_x, x_max + pad_x, 200)
 	y_lin = np.linspace(y_min - pad_y, y_max + pad_y, 200)
 	XX, YY = np.meshgrid(x_lin, y_lin)
-	grid = np.c_[XX.ravel(), YY.ravel()]  # (Ny*Nx, 2)
+	grid = np.c_[XX.ravel(), YY.ravel()].astype(np.float64)  # (Ny*Nx, 2)
 
 	# Scores for all classes: S = XW + b
+	# With bias
 	S = grid @ W + b  # (Ny*Nx, K)
 	scores = S.reshape(XX.shape + (W.shape[1],))
+	# Without bias
+	S_nb = grid @ W  # (Ny*Nx, K)
+	scores_nb = S_nb.reshape(XX.shape + (W.shape[1],))
 
 	extent = (x_lin.min(), x_lin.max(), y_lin.min(), y_lin.max())
 	return {
 		"XX": XX,
 		"YY": YY,
 		"scores": scores,
+		"scores_no_bias": scores_nb,
 		"X_loaded": X_loaded,
 		"y_loaded": y_loaded,
 		"class_labels": class_labels,
+		"W": W,
+		"b": b,
+		"grid": grid,
 		"extent": extent,
 	}
 
@@ -621,7 +638,7 @@ def _plot_Z_surface_from_exports(as_log: bool = Z_AS_LOG, save_png: bool = SAVE_
 
 	fig = plt.figure(figsize=(10, 8))
 	ax = fig.add_subplot(111, projection='3d')
-	ax.plot_surface(XX, YY, data_to_plot, cmap='viridis', alpha=0.9, linewidth=0)
+	ax.plot_surface(XX, YY, data_to_plot, cmap='magma', alpha=0.9, linewidth=0)
 	ax.set_xlabel('x1')
 	ax.set_ylabel('x2')
 	ax.set_zlabel('log Z(x)' if as_log else 'Z(x)')
@@ -646,6 +663,101 @@ if PLOT_Z2D:
 
 if PLOT_Z3D:
 	_plot_Z_surface_from_exports(as_log=Z_AS_LOG, save_png=SAVE_Z, show=SHOW_Z)
+
+
+def _plot_P_heatmap_from_exports(
+	classes_to_plot: list[int] = P_CLASSES_TO_PLOT,
+	num_use_bias: bool = PROB_NUM_USE_BIAS,
+	den_use_bias: bool = PROB_DEN_USE_BIAS,
+	save_png: bool = SAVE_P,
+	show: bool = SHOW_P,
+):
+	"""Plot probability heatmaps P(n|x) = exp(s_n(x)) / sum_k exp(s_k(x)).
+
+	- Numerator uses s_n(x) = w_n^T x (+ b_n if num_use_bias)
+	- Denominator Z uses scores with or without bias depending on den_use_bias
+	"""
+	try:
+		import matplotlib.pyplot as plt
+	except Exception:
+		print("matplotlib not available, skipping P(n|x) heatmaps.")
+		return
+
+	bundle = _compute_grid_and_scores_from_exports()
+	if bundle is None:
+		return
+
+	XX, YY = bundle["XX"], bundle["YY"]
+	scores_b = bundle["scores"]
+	scores_nb = bundle["scores_no_bias"]
+	class_labels = bundle["class_labels"]
+	X_loaded, y_loaded = bundle["X_loaded"], bundle["y_loaded"]
+	extent = bundle["extent"]
+
+	# Choose score tensors for numerator and denominator
+	S_num = scores_b if num_use_bias else scores_nb
+	S_den = scores_b if den_use_bias else scores_nb
+
+	# Precompute logZ via log-sum-exp for denominator
+	m = np.max(S_den, axis=-1, keepdims=True)  # (Ny, Nx, 1)
+	with np.errstate(over='ignore', under='ignore', invalid='ignore'):
+		sum_exp = np.sum(np.exp(S_den - m), axis=-1)  # (Ny, Nx)
+		logZ = m[..., 0] + np.log(sum_exp + 1e-12)    # (Ny, Nx)
+
+	# Map requested labels to indices
+	# Keep only classes that exist
+	labels_to_plot = [int(c) for c in classes_to_plot if int(c) in set(map(int, class_labels))]
+	if not labels_to_plot:
+		print("No valid classes to plot.")
+		return
+
+	# Create a separate figure for each requested class
+	for j, lab in enumerate(labels_to_plot):
+		fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+		# class index
+		k = int(np.where(class_labels == lab)[0][0])
+		# logP = s_k - logZ
+		logP = S_num[..., k] - logZ
+		with np.errstate(over='ignore', under='ignore', invalid='ignore'):
+			P = np.exp(np.clip(logP, -50, 50))  # clip for safety
+		hm = ax.imshow(P, origin='lower', extent=extent, aspect='auto', vmin=0.0, vmax=1.0, cmap='magma')
+		cbar = plt.colorbar(hm, ax=ax)
+		cbar.set_label(f"P(n={lab} | x)")
+
+		# Overlay dataset points
+		colors = {-1: 'tab:red', 0: 'tab:blue', 1: 'tab:green'}
+		for yl in np.unique(y_loaded):
+			mask = (y_loaded == yl)
+			ax.scatter(X_loaded[mask, 0], X_loaded[mask, 1], s=8, c=colors.get(int(yl), 'gray'), alpha=0.6, label=f"y={int(yl)}")
+		ax.set_title(f"P(n={lab} | x)" + (" (num+bias)" if num_use_bias else "") + (" / Z(bias)" if den_use_bias else " / Z(no-bias)"))
+		ax.set_xlabel('x1')
+		ax.set_ylabel('x2')
+		ax.legend(loc='upper left')
+
+		plt.tight_layout()
+
+		if save_png:
+			out_dir = Path(__file__).resolve().parent / EXPORT_DIR
+			out_dir.mkdir(parents=True, exist_ok=True)
+			bias_tag = ("numb" if num_use_bias else "numb0") + ("_denb" if den_use_bias else "_denb0")
+			fname = out_dir / f"P_heatmap_n_{lab}_{bias_tag}.png"
+			plt.savefig(fname, dpi=200)
+			print(f"Saved probability heatmap to: {fname}")
+
+		if show:
+			plt.show()
+		else:
+			plt.close(fig)
+
+
+if PLOT_P2D:
+	_plot_P_heatmap_from_exports(
+		classes_to_plot=P_CLASSES_TO_PLOT,
+		num_use_bias=PROB_NUM_USE_BIAS,
+		den_use_bias=PROB_DEN_USE_BIAS,
+		save_png=SAVE_P,
+		show=SHOW_P,
+	)
 
 
 
