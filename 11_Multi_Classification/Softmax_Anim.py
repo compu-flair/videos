@@ -40,14 +40,18 @@ EXPORT_DIR = "exports"  # Relative to this file's directory
 PLOT3D = True
 CLASS_FOR_3D = 1           # class label to visualize (e.g., -1, 0, or 1)
 USE_BIAS_FOR_3D = False    # if True, plot z = w^T x + b; else z = w^T x
-SAVE_3D = False            # save figure to PNG under EXPORT_DIR
+SAVE_3D = True             # save figure to PNG under EXPORT_DIR
 SHOW_3D = True             # show interactive window (may block)
+ANIMATE_3D = True          # animate with dynamic camera movements
+ANIMATION_FRAMES = 1020    # number of frames (about 34 seconds at 30fps)
+ANIMATION_FPS = 30         # frames per second
+SAVE_ANIMATION = True      # save animation as MP4/GIF
 
 # Partition function Z(x) = sum_n exp(w_n^T x + b_n) plot controls
 PLOT_Z2D = True            # 2D heatmap of Z (or log Z)
 PLOT_Z3D = False           # 3D surface plot of Z (or log Z)
 Z_AS_LOG = True            # if True, plot log Z(x) for stability
-SAVE_Z = False             # save Z plot(s) under EXPORT_DIR
+SAVE_Z = True              # save Z plot(s) under EXPORT_DIR
 SHOW_Z = True              # show interactive window (may block)
 
 # Probability P(n|x) plots where P(n|x) = exp(w_n^T x (+ b_n?)) / Z(x)
@@ -56,7 +60,7 @@ PLOT_P2D = True            # heatmaps of class probabilities
 P_CLASSES_TO_PLOT = [-1, 0, 1]  # which class labels to render
 PROB_NUM_USE_BIAS = False  # numerator uses b_n if True; else only w_n^T x
 PROB_DEN_USE_BIAS = True   # denominator Z uses b_n if True; else only w_k^T x
-SAVE_P = False             # save probability heatmaps
+SAVE_P = True              # save probability heatmaps
 SHOW_P = True              # show probability heatmaps
 
 
@@ -206,7 +210,7 @@ def maybe_plot(X: np.ndarray, y: np.ndarray, model: SoftmaxRegressor, label_valu
 	zz_idx = map_labels_to_indices(zz.ravel(), label_values).reshape(zz.shape)
 	plt.contourf(xx, yy, zz_idx, alpha=0.2, levels=[-0.5, 0.5, 1.5, 2.5], cmap=cmap)
 
-	plt.legend()
+	# plt.legend()
 	plt.title("Softmax Classifier Decision Regions")
 	plt.xlabel("x1")
 	plt.ylabel("x2")
@@ -432,13 +436,24 @@ def _plot_3d_from_exports(
 	XX, YY = np.meshgrid(x_lin, y_lin)
 	ZZ = w[0] * XX + w[1] * YY + (b if use_bias else 0.0)
 
+	# --- Dark Quantum Aesthetic ---
+	plt.style.use('dark_background')
+	
 	# Figure
-	fig = plt.figure(figsize=(10, 8))
+	fig = plt.figure(figsize=(10, 7))
 	ax = fig.add_subplot(111, projection='3d')
-	ax.set_xlabel('x1')
-	ax.set_ylabel('x2')
-	ax.set_zlabel(r'$z = w^T x$' + (' + b' if use_bias else ''))
-	# ax.set_title(f"3D: class {class_label} — w=({w[0]:.3f},{w[1]:.3f})")
+	
+	# --- Remove panes & grids for clean dark look ---
+	ax.grid(False)
+	ax.xaxis.pane.set_visible(False)
+	ax.yaxis.pane.set_visible(False)
+	ax.zaxis.pane.set_visible(False)
+	ax.set_facecolor("black")
+	
+	ax.set_xlabel('$x_1$', color='white')
+	ax.set_ylabel('$x_2$', color='white')
+	ax.set_zlabel(r'$z = w^T x$' + (' + b' if use_bias else ''), color='white')
+	# ax.set_title(f"3D: class {class_label} — w=({w[0]:.3f},{w[1]:.3f})", color='white', fontsize=14, pad=15)
 
 	# Surface plane
 	ax.plot_surface(XX, YY, ZZ, cmap='magma', alpha=0.25, linewidth=0, antialiased=False)
@@ -449,40 +464,181 @@ def _plot_3d_from_exports(
 		mask = (y_loaded == lab)
 		ax.scatter(X_loaded[mask, 0], X_loaded[mask, 1], z_vals[mask], s=8, color=colors.get(int(lab), 'gray'), alpha=0.8, label=f"y={int(lab)}")
 	# ax.legend(loc='upper left')
-
-	# Draw w vector on base plane (z=0)
-	ax.quiver(0, 0, 0, w[0], w[1], 0, color='black', linewidth=2, arrow_length_ratio=0.1)
-	ax.text(w[0], w[1], 0, '  w', color='black')
-
-	# Draw a few verticals to show z for sample x
-	idxs = np.linspace(0, X_loaded.shape[0]-1, num=6, dtype=int)
-	for i in idxs:
-		x1, x2 = float(X_loaded[i, 0]), float(X_loaded[i, 1])
-		z = float(z_vals[i])
-		ax.plot([x1, x1], [x2, x2], [0.0, z], color='gray', alpha=0.6, linewidth=1)
+	
+	# --- Axis limits & viewing angle ---
+	ax.view_init(elev=25, azim=125)
 
 	# Save/show
-	if save_png:
+	if save_png and not ANIMATE_3D:
 		out_dir = script_dir / EXPORT_DIR
 		out_dir.mkdir(parents=True, exist_ok=True)
 		fname = out_dir / f"dotproduct_3d_class_{class_label}{'_bias' if use_bias else ''}.png"
 		plt.tight_layout()
-		plt.savefig(fname, dpi=200)
+		plt.savefig(fname, dpi=1000, bbox_inches='tight', facecolor='black')
 		print(f"Saved 3D plot to: {fname}")
 
-	if show:
+	if show and not ANIMATE_3D:
+		plt.show()
+	elif not ANIMATE_3D:
+		plt.close(fig)
+	
+	return fig, ax, X_loaded, y_loaded, z_vals, XX, YY, ZZ
+
+
+def _animate_3d_rotation():
+	"""Animate the 3D plot with dynamic camera movements: rotation, zoom, top view, etc."""
+	try:
+		import matplotlib.pyplot as plt
+		from matplotlib.animation import FuncAnimation, PillowWriter, FFMpegWriter
+	except Exception as e:
+		print(f"Animation libraries not available: {e}")
+		return
+	
+	print("\nGenerating 3D animation with dynamic camera movements...")
+	
+	# Get the figure and data from _plot_3d_from_exports
+	result = _plot_3d_from_exports(
+		class_label=CLASS_FOR_3D,
+		use_bias=USE_BIAS_FOR_3D,
+		save_png=False,
+		show=False,
+	)
+	
+	if result is None:
+		print("Could not generate 3D plot for animation.")
+		return
+	
+	fig, ax, X_loaded, y_loaded, z_vals, XX, YY, ZZ = result
+	
+	# Store initial limits for zoom
+	xlim = ax.get_xlim()
+	ylim = ax.get_ylim()
+	zlim = ax.get_zlim()
+	
+	# Define keyframes: (frame_num, elevation, azimuth, zoom_factor, description)
+	total_frames = ANIMATION_FRAMES
+	keyframes = [
+		# Start: standard view, full rotation
+		(0, 25, 0, 1.0, "Standard view - rotation start"),
+		(90, 25, 90, 1.0, "Quarter turn"),
+		(180, 25, 180, 1.0, "Half turn"),
+		(270, 25, 270, 1.0, "Three-quarter turn"),
+		
+		# Top view sequence
+		(360, 90, 0, 1.0, "Top view - bird's eye"),
+		(450, 90, 180, 1.0, "Top view - rotated"),
+		
+		# Side views
+		(540, 0, 0, 1.0, "Front view"),
+		(600, 0, 90, 1.0, "Side view"),
+		
+		# Zoom in sequence
+		(660, 25, 45, 0.5, "Zoom in close"),
+		(720, 25, 135, 0.5, "Zoom in - different angle"),
+		
+		# Low angle view
+		(780, 10, 225, 1.0, "Low angle view"),
+		(840, 10, 315, 1.0, "Low angle - opposite side"),
+		
+		# High angle view with zoom out
+		(900, 60, 45, 1.5, "High angle - zoomed out"),
+		(960, 60, 225, 1.5, "High angle - opposite"),
+		
+		# Return to start
+		(1020, 25, 360, 1.0, "Return to start"),
+	]
+	
+	# Interpolate between keyframes
+	def interpolate_params(frame):
+		# Find surrounding keyframes
+		for i in range(len(keyframes) - 1):
+			f1, e1, a1, z1, _ = keyframes[i]
+			f2, e2, a2, z2, _ = keyframes[i + 1]
+			
+			if f1 <= frame <= f2:
+				# Linear interpolation
+				t = (frame - f1) / (f2 - f1) if f2 != f1 else 0
+				elev = e1 + t * (e2 - e1)
+				azim = a1 + t * (a2 - a1)
+				zoom = z1 + t * (z2 - z1)
+				return elev, azim, zoom
+		
+		# Default to last keyframe
+		return keyframes[-1][1], keyframes[-1][2], keyframes[-1][3]
+	
+	# Animation function with dynamic camera
+	def update(frame):
+		elev, azim, zoom = interpolate_params(frame)
+		ax.view_init(elev=elev, azim=azim)
+		
+		# Apply zoom by adjusting axis limits
+		x_center = (xlim[0] + xlim[1]) / 2
+		y_center = (ylim[0] + ylim[1]) / 2
+		z_center = (zlim[0] + zlim[1]) / 2
+		
+		x_range = (xlim[1] - xlim[0]) / 2 * zoom
+		y_range = (ylim[1] - ylim[0]) / 2 * zoom
+		z_range = (zlim[1] - zlim[0]) / 2 * zoom
+		
+		ax.set_xlim(x_center - x_range, x_center + x_range)
+		ax.set_ylim(y_center - y_range, y_center + y_range)
+		ax.set_zlim(z_center - z_range, z_center + z_range)
+		
+		return fig,
+	
+	# Use total frames from last keyframe
+	max_frame = keyframes[-1][0]
+	frames_to_use = min(max_frame, total_frames)
+	
+	# Create animation
+	anim = FuncAnimation(
+		fig, 
+		update, 
+		frames=np.linspace(0, frames_to_use, frames_to_use),
+		interval=1000/ANIMATION_FPS,
+		blit=False
+	)
+	
+	print(f"Animation sequence: {len(keyframes)} keyframes, {frames_to_use} total frames")
+	
+	# Save animation
+	if SAVE_ANIMATION:
+		script_dir = Path(__file__).resolve().parent
+		out_dir = script_dir / EXPORT_DIR
+		out_dir.mkdir(parents=True, exist_ok=True)
+		
+		# Try to save as MP4 first, fallback to GIF
+		try:
+			fname = out_dir / f"dotproduct_3d_class_{CLASS_FOR_3D}_rotation.mp4"
+			writer = FFMpegWriter(fps=ANIMATION_FPS, bitrate=1800)
+			anim.save(fname, writer=writer, dpi=150)
+			print(f"Saved animation to: {fname}")
+		except Exception as e:
+			print(f"Could not save as MP4 ({e}), trying GIF...")
+			try:
+				fname = out_dir / f"dotproduct_3d_class_{CLASS_FOR_3D}_rotation.gif"
+				writer = PillowWriter(fps=ANIMATION_FPS)
+				anim.save(fname, writer=writer, dpi=100)
+				print(f"Saved animation to: {fname}")
+			except Exception as e2:
+				print(f"Could not save animation: {e2}")
+	
+	if SHOW_3D:
 		plt.show()
 	else:
 		plt.close(fig)
 
 
-if PLOT3D:
-	_plot_3d_from_exports(
-		class_label=CLASS_FOR_3D,
-		use_bias=USE_BIAS_FOR_3D,
-		save_png=SAVE_3D,
-		show=SHOW_3D,
-	)
+# if PLOT3D:
+# 	if ANIMATE_3D:
+# 		_animate_3d_rotation()
+# 	else:
+# 		_plot_3d_from_exports(
+# 			class_label=CLASS_FOR_3D,
+# 			use_bias=USE_BIAS_FOR_3D,
+# 			save_png=SAVE_3D,
+# 			show=SHOW_3D,
+# 		)
 
 
 def _compute_grid_and_scores_from_exports():
@@ -575,7 +731,9 @@ def _plot_Z_heatmap_from_exports(as_log: bool = Z_AS_LOG, save_png: bool = SAVE_
 		logZ = (s_max[..., 0] + np.log(sum_exp + 1e-12))   # (Ny, Nx)
 	Z = np.exp(logZ)
 
-	fig, ax = plt.subplots(figsize=(8, 6))
+	# Dark background styling
+	plt.style.use('dark_background')
+	fig, ax = plt.subplots(figsize=(8, 6), facecolor='black')
 	data_to_plot = logZ if as_log else Z
 	hm = ax.imshow(
 		data_to_plot,
@@ -585,24 +743,25 @@ def _plot_Z_heatmap_from_exports(as_log: bool = Z_AS_LOG, save_png: bool = SAVE_
 		cmap='magma',
 	)
 	cbar = plt.colorbar(hm, ax=ax)
-	cbar.set_label('log Z(x)' if as_log else 'Z(x)')
+	cbar.set_label('log Z(x)' if as_log else 'Z(x)', color='white')
 
 	# Overlay dataset points
 	colors = {-1: 'tab:red', 0: 'tab:blue', 1: 'tab:green'}
 	for lab in np.unique(y_loaded):
 		mask = (y_loaded == lab)
 		ax.scatter(X_loaded[mask, 0], X_loaded[mask, 1], s=8, c=colors.get(int(lab), 'gray'), alpha=0.7, label=f"y={int(lab)}")
-	ax.legend(loc='upper left')
-	ax.set_xlabel('x1')
-	ax.set_ylabel('x2')
-	ax.set_title('Heatmap of ' + (r'$\log Z(x)$' if as_log else r'$Z(x)$'))
+	# ax.legend(loc='upper left')
+	ax.set_xlabel('x1', color='white')
+	ax.set_ylabel('x2', color='white')
+	ax.set_title('Heatmap of ' + (r'$\log Z(x)$' if as_log else r'$Z(x)$'), color='white')
+	ax.set_facecolor('black')
 	plt.tight_layout()
 
 	if save_png:
 		out_dir = Path(__file__).resolve().parent / EXPORT_DIR
 		out_dir.mkdir(parents=True, exist_ok=True)
 		fname = out_dir / f"Z_heatmap{'_log' if as_log else ''}.png"
-		plt.savefig(fname, dpi=200)
+		plt.savefig(fname, dpi=1000, facecolor='black', bbox_inches='tight')
 		print(f"Saved Z heatmap to: {fname}")
 
 	if show:
@@ -636,20 +795,30 @@ def _plot_Z_surface_from_exports(as_log: bool = Z_AS_LOG, save_png: bool = SAVE_
 
 	data_to_plot = logZ if as_log else Z
 
-	fig = plt.figure(figsize=(10, 8))
+	# Dark background styling
+	plt.style.use('dark_background')
+	fig = plt.figure(figsize=(10, 8), facecolor='black')
 	ax = fig.add_subplot(111, projection='3d')
+	
+	# Remove panes & grids for clean dark look
+	ax.grid(False)
+	ax.xaxis.pane.set_visible(False)
+	ax.yaxis.pane.set_visible(False)
+	ax.zaxis.pane.set_visible(False)
+	ax.set_facecolor('black')
+	
 	ax.plot_surface(XX, YY, data_to_plot, cmap='magma', alpha=0.9, linewidth=0)
-	ax.set_xlabel('x1')
-	ax.set_ylabel('x2')
-	ax.set_zlabel('log Z(x)' if as_log else 'Z(x)')
-	ax.set_title('Surface of ' + (r'$\log Z(x)$' if as_log else r'$Z(x)$'))
+	ax.set_xlabel('x1', color='white')
+	ax.set_ylabel('x2', color='white')
+	ax.set_zlabel('log Z(x)' if as_log else 'Z(x)', color='white')
+	ax.set_title('Surface of ' + (r'$\log Z(x)$' if as_log else r'$Z(x)$'), color='white')
 	plt.tight_layout()
 
 	if save_png:
 		out_dir = Path(__file__).resolve().parent / EXPORT_DIR
 		out_dir.mkdir(parents=True, exist_ok=True)
 		fname = out_dir / f"Z_surface{'_log' if as_log else ''}.png"
-		plt.savefig(fname, dpi=200)
+		plt.savefig(fname, dpi=1000, facecolor='black', bbox_inches='tight')
 		print(f"Saved Z 3D surface to: {fname}")
 
 	if show:
@@ -713,7 +882,11 @@ def _plot_P_heatmap_from_exports(
 
 	# Create a separate figure for each requested class
 	for j, lab in enumerate(labels_to_plot):
-		fig, ax = plt.subplots(1, 1, figsize=(7, 5))
+		# Dark background styling
+		plt.style.use('dark_background')
+		fig, ax = plt.subplots(1, 1, figsize=(7, 5), facecolor='black')
+		ax.set_facecolor('black')
+		
 		# class index
 		k = int(np.where(class_labels == lab)[0][0])
 		# logP = s_k - logZ
@@ -722,17 +895,17 @@ def _plot_P_heatmap_from_exports(
 			P = np.exp(np.clip(logP, -50, 50))  # clip for safety
 		hm = ax.imshow(P, origin='lower', extent=extent, aspect='auto', vmin=0.0, vmax=1.0, cmap='magma')
 		cbar = plt.colorbar(hm, ax=ax)
-		cbar.set_label(f"P(n={lab} | x)")
+		cbar.set_label(f"P(n={lab} | x)", color='white')
 
 		# Overlay dataset points
 		colors = {-1: 'tab:red', 0: 'tab:blue', 1: 'tab:green'}
 		for yl in np.unique(y_loaded):
 			mask = (y_loaded == yl)
 			ax.scatter(X_loaded[mask, 0], X_loaded[mask, 1], s=8, c=colors.get(int(yl), 'gray'), alpha=0.6, label=f"y={int(yl)}")
-		ax.set_title(f"P(n={lab} | x)" + (" (num+bias)" if num_use_bias else "") + (" / Z(bias)" if den_use_bias else " / Z(no-bias)"))
-		ax.set_xlabel('x1')
-		ax.set_ylabel('x2')
-		ax.legend(loc='upper left')
+		ax.set_title(f"P(n={lab} | x)" + (" (num+bias)" if num_use_bias else "") + (" / Z(bias)" if den_use_bias else " / Z(no-bias)"), color='white')
+		ax.set_xlabel('x1', color='white')
+		ax.set_ylabel('x2', color='white')
+		# ax.legend(loc='upper left')
 
 		plt.tight_layout()
 
@@ -741,7 +914,7 @@ def _plot_P_heatmap_from_exports(
 			out_dir.mkdir(parents=True, exist_ok=True)
 			bias_tag = ("numb" if num_use_bias else "numb0") + ("_denb" if den_use_bias else "_denb0")
 			fname = out_dir / f"P_heatmap_n_{lab}_{bias_tag}.png"
-			plt.savefig(fname, dpi=200)
+			plt.savefig(fname, dpi=1000, facecolor='black', bbox_inches='tight')
 			print(f"Saved probability heatmap to: {fname}")
 
 		if show:
