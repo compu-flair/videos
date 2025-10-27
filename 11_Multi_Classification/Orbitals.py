@@ -135,7 +135,7 @@ for i, (key, (X, Yc, Z)) in enumerate(surfaces.items(), 1):
             mp4_path,
             writer="ffmpeg",
             fps=FPS,
-            dpi=120,
+            dpi=300,
             savefig_kwargs={"facecolor": "black", "edgecolor": "none"},
         )
         print(f"Saved animation to {mp4_path}")

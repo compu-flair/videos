@@ -2721,3 +2721,120 @@ class Scene21(Scene):
         self.wait(2)
 
 
+class Scene22(Scene):
+    """
+    Scene 22: Three Hydrogen Atoms with Different Energy Levels
+    Show three atoms side by side, each with electron orbiting at different level
+    """
+    def construct(self):
+        # Create three hydrogen atoms stacked vertically
+        positions = [3*DOWN, ORIGIN+ DOWN, 2*UP]
+        colors = [BLUE, GREEN, RED]
+        energy_levels = ["n=1", "n=2", "n=3"]
+        orbit_radii = [0.6, 1.0, 1.4]
+        
+        atoms = VGroup()
+        
+        for pos, color, level, radius in zip(positions, colors, energy_levels, orbit_radii):
+            atom = self.create_hydrogen_atom(pos, color, level, radius)
+            atoms.add(atom)
+        
+        # Animate atoms appearing
+        self.play(
+            LaggedStart(
+                *[FadeIn(atom, scale=0.5) for atom in atoms],
+                lag_ratio=0.3
+            ),
+            run_time=2
+        )
+        
+        self.wait(1)
+        
+        # Create continuous rotation animations for all electrons
+        rotations = []
+        for i, atom in enumerate(atoms):
+            # atom structure: nucleus_glow, nucleus, electron_glow, electron, orbit, label
+            electron_glow = atom[2]  # electron_glow
+            electron = atom[3]  # electron
+            nucleus_pos = atom[1].get_center()  # Nucleus position
+            
+            # Create electron group
+            electron_group = VGroup(electron_glow, electron)
+            
+            # Create continuous rotation animation
+            rotation = Rotating(
+                electron_group,
+                radians=2*PI,
+                about_point=nucleus_pos,
+                run_time=4,
+                rate_func=linear
+            )
+            rotations.append(rotation)
+        
+        # Play all rotations simultaneously and loop them
+        for _ in range(15):  # Repeat 3 times for longer duration
+            self.play(*rotations, run_time=4, rate_func=linear)
+        
+        self.wait(1)
+    
+    def create_hydrogen_atom(self, position, color, level_label, orbit_radius):
+        """Create a hydrogen atom with nucleus and orbiting electron"""
+        
+        # Nucleus (proton)
+        nucleus = Dot(color=RED, radius=0.15)
+        nucleus.set_sheen(0.5, UL)
+        nucleus.move_to(position)
+        
+        # Nucleus glow
+        nucleus_glow = Circle(radius=0.25, color=RED, fill_opacity=0.3, stroke_width=0)
+        nucleus_glow.move_to(position)
+        
+        # Orbit path
+        orbit = Circle(radius=orbit_radius, color=color, stroke_width=2, stroke_opacity=0.5)
+        orbit.move_to(position)
+        
+        # Electron (starts at rightmost point of orbit)
+        electron = Dot(color=YELLOW, radius=0.12)
+        electron.set_sheen(0.5, UL)
+        electron.move_to(position + orbit_radius * RIGHT)
+        
+        # Electron glow
+        electron_glow = Circle(radius=0.2, color=YELLOW, fill_opacity=0.4, stroke_width=0)
+        electron_glow.move_to(electron.get_center())
+        
+        # Group everything together (no label)
+        atom_group = VGroup(nucleus_glow, nucleus, electron_glow, electron, orbit)
+        
+        return atom_group
+    
+    def create_orbit_animation(self, electron_glow, electron, nucleus_pos, radius):
+        """Create animation for electron orbiting around nucleus"""
+        # Create a group with electron and its glow
+        electron_group = VGroup(electron_glow, electron)
+        
+        # Create rotation animation
+        return Rotate(
+            electron_group,
+            angle=2*PI,
+            about_point=nucleus_pos
+        )
+
+
+
+
+
+
+class Scene23(Scene):
+    """
+    Scene 20: Boltzmann version of the softmax equation
+    """
+    def construct(self):
+        equation = MathTex(
+            r"P(n) = \frac{e^{-\beta E_n}}{Z}",
+            font_size=102,
+            color=PURE_RED
+        )
+        
+        self.play(Write(equation), run_time=1)
+        
+        self.wait(3)
